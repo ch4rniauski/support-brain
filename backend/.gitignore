@@ -1,0 +1,46 @@
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+bin/
+dist/
+
+# Go workspace
+go.work
+go.work.sum
+
+# Dependency / build cache
+vendor/
+
+# Test & coverage
+*.coverprofile
+coverage.*
+*.prof
+*.pprof
+
+# IDE / editor
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Env & secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Debug / temp
+debug
+tmp/
+temp/

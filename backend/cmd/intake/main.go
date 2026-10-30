@@ -11,7 +11,10 @@ import (
 
 	"github.com/ch4rniauski/support-brain/internal/intake/api"
 	"github.com/ch4rniauski/support-brain/internal/intake/config"
+	"github.com/ch4rniauski/support-brain/internal/intake/handler"
 	"github.com/ch4rniauski/support-brain/internal/intake/postgres"
+	"github.com/ch4rniauski/support-brain/internal/intake/repository"
+	"github.com/ch4rniauski/support-brain/internal/intake/service"
 )
 
 func main() {
@@ -33,9 +36,14 @@ func main() {
 	}
 	defer pool.Close()
 
+	conversationRepo := repository.NewConversationRepository(pool)
+	messageRepo := repository.NewMessageRepository(pool)
+	messageService := service.NewMessageService(conversationRepo, messageRepo)
+	messageHandler := handler.NewMessageHandler(messageService)
+
 	server := &http.Server{
 		Addr:              fmt.Sprintf(":%s", cfg.HTTP.Port),
-		Handler:           api.NewRouter(),
+		Handler:           api.NewRouter(messageHandler),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 

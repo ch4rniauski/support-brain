@@ -26,20 +26,40 @@ func (h *MessageHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
 
 	resp, err := h.service.SendMessage(r.Context(), req)
 	if err != nil {
-		switch {
-		case errors.Is(err, service.ErrInvalidInput):
-			writeError(w, http.StatusBadRequest, err.Error())
-		case errors.Is(err, service.ErrConversationNotFound):
-			writeError(w, http.StatusNotFound, err.Error())
-		case errors.Is(err, service.ErrConversationClosed):
-			writeError(w, http.StatusConflict, err.Error())
-		default:
-			writeError(w, http.StatusInternalServerError, "internal server error")
-		}
+		writeMessageError(w, err)
 		return
 	}
 
 	writeJSON(w, http.StatusCreated, resp)
+}
+
+func (h *MessageHandler) ReplyMessage(w http.ResponseWriter, r *http.Request) {
+	var req dto.ReplyMessageRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	resp, err := h.service.ReplyMessage(r.Context(), req)
+	if err != nil {
+		writeMessageError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusCreated, resp)
+}
+
+func writeMessageError(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, service.ErrInvalidInput):
+		writeError(w, http.StatusBadRequest, err.Error())
+	case errors.Is(err, service.ErrConversationNotFound):
+		writeError(w, http.StatusNotFound, err.Error())
+	case errors.Is(err, service.ErrConversationClosed):
+		writeError(w, http.StatusConflict, err.Error())
+	default:
+		writeError(w, http.StatusInternalServerError, "internal server error")
+	}
 }
 
 func writeJSON(w http.ResponseWriter, status int, payload any) {

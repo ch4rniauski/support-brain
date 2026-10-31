@@ -1,15 +1,14 @@
 package config
 
 import (
-	"time"
-
+	"github.com/ch4rniauski/support-brain/pkg/auth"
 	"github.com/kelseyhightower/envconfig"
 )
 
 type Config struct {
 	HTTP     HTTPConfig
 	Postgres PostgresConfig
-	Auth     AuthConfig
+	Auth     auth.Config
 }
 
 type HTTPConfig struct {
@@ -22,11 +21,6 @@ type PostgresConfig struct {
 	User     string `envconfig:"POSTGRES_USER" default:"postgres"`
 	Password string `envconfig:"POSTGRES_PASSWORD" default:"postgres"`
 	Database string `envconfig:"POSTGRES_DB" default:"support-brain"`
-}
-
-type AuthConfig struct {
-	JWTSecret string        `envconfig:"AUTH_JWT_SECRET" default:"dev-secret-change-me"`
-	TokenTTL  time.Duration `envconfig:"AUTH_TOKEN_TTL" default:"24h"`
 }
 
 func Load() (*Config, error) {

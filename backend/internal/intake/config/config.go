@@ -1,10 +1,14 @@
 package config
 
-import "github.com/kelseyhightower/envconfig"
+import (
+	"github.com/ch4rniauski/support-brain/pkg/auth"
+	"github.com/kelseyhightower/envconfig"
+)
 
 type Config struct {
 	HTTP     HTTPConfig
 	Postgres PostgresConfig
+	Auth     auth.Config
 }
 
 type HTTPConfig struct {

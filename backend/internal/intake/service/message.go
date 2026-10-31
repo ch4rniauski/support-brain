@@ -53,7 +53,7 @@ func (s *MessageService) SendMessage(ctx context.Context, req dto.SendMessageReq
 	now := time.Now().UTC()
 	msg := &domain.Message{
 		ID:         uuid.New(),
-		SenderType: domain.SenderType(req.SenderType),
+		SenderType: domain.SenderTypeClient,
 		Body:       req.Body,
 		SentAt:     now,
 	}
@@ -73,7 +73,30 @@ func (s *MessageService) SendMessage(ctx context.Context, req dto.SendMessageReq
 		return &dto.SendMessageResponse{ConversationID: conv.ID}, nil
 	}
 
-	conv, err := s.conversations.GetByID(ctx, *req.ConversationID)
+	return s.appendToConversation(ctx, *req.ConversationID, msg)
+}
+
+func (s *MessageService) ReplyMessage(ctx context.Context, req dto.ReplyMessageRequest) (*dto.SendMessageResponse, error) {
+	if err := s.validate.Struct(req); err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrInvalidInput, err)
+	}
+
+	msg := &domain.Message{
+		ID:         uuid.New(),
+		SenderType: domain.SenderTypeOperator,
+		Body:       req.Body,
+		SentAt:     time.Now().UTC(),
+	}
+
+	return s.appendToConversation(ctx, req.ConversationID, msg)
+}
+
+func (s *MessageService) appendToConversation(
+	ctx context.Context,
+	conversationID uuid.UUID,
+	msg *domain.Message,
+) (*dto.SendMessageResponse, error) {
+	conv, err := s.conversations.GetByID(ctx, conversationID)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
 			return nil, ErrConversationNotFound

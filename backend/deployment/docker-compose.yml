@@ -17,7 +17,7 @@ services:
       retries: 10
 
   ollama:
-    image: ollama/ollama:latest
+    image: ollama/ollama:0.40.13
     ports:
       - "${OLLAMA_PORT}:11434"
     volumes:
@@ -55,6 +55,8 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
+      AUTH_JWT_SECRET: ${AUTH_JWT_SECRET}
+      AUTH_TOKEN_TTL: ${AUTH_TOKEN_TTL}
     ports:
       - "${INTAKE_HOST_PORT}:${HTTP_PORT}"
     depends_on:

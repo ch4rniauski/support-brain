@@ -15,6 +15,7 @@ import (
 	"github.com/ch4rniauski/support-brain/internal/intake/postgres"
 	"github.com/ch4rniauski/support-brain/internal/intake/repository"
 	"github.com/ch4rniauski/support-brain/internal/intake/service"
+	"github.com/ch4rniauski/support-brain/pkg/auth"
 )
 
 func main() {
@@ -36,6 +37,9 @@ func main() {
 	}
 	defer pool.Close()
 
+	tokenManager := auth.NewTokenManager(cfg.Auth.JWTSecret, cfg.Auth.TokenTTL)
+	authMiddleware := auth.NewMiddleware(tokenManager)
+
 	conversationRepo := repository.NewConversationRepository(pool)
 	messageRepo := repository.NewMessageRepository(pool)
 	messageService := service.NewMessageService(conversationRepo, messageRepo)
@@ -43,7 +47,7 @@ func main() {
 
 	server := &http.Server{
 		Addr:              fmt.Sprintf(":%s", cfg.HTTP.Port),
-		Handler:           api.NewRouter(messageHandler),
+		Handler:           api.NewRouter(messageHandler, authMiddleware),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 

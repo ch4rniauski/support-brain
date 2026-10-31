@@ -14,9 +14,9 @@ const (
 )
 
 type Message struct {
-	ID             uuid.UUID
-	ConversationID uuid.UUID
-	SenderType     SenderType
-	Body           string
-	SentAt         time.Time
+	ID             uuid.UUID  `db:"id"`
+	ConversationID uuid.UUID  `db:"conversation_id"`
+	SenderType     SenderType `db:"sender_type"`
+	Body           string     `db:"body"`
+	SentAt         time.Time  `db:"sent_at"`
 }

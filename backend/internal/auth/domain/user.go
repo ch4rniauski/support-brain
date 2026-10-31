@@ -6,8 +6,8 @@ import (
 )
 
 type User struct {
-	ID           uuid.UUID
-	Login        string
-	PasswordHash string
-	Role         auth.Role
+	ID           uuid.UUID `db:"id"`
+	Login        string    `db:"login"`
+	PasswordHash string    `db:"password_hash"`
+	Role         auth.Role `db:"role"`
 }

@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -28,19 +29,31 @@ type messageStore interface {
 	Create(ctx context.Context, msg *domain.Message) error
 }
 
+type qaPairStore interface {
+	CreateWithMessageAndOutbox(
+		ctx context.Context,
+		msg *domain.Message,
+		pair *domain.QAPair,
+		event *domain.OutboxEvent,
+	) error
+}
+
 type MessageService struct {
 	conversations conversationStore
 	messages      messageStore
+	qaPairs       qaPairStore
 	validate      *validator.Validate
 }
 
 func NewMessageService(
 	conversations *repository.ConversationRepository,
 	messages *repository.MessageRepository,
+	qaPairs *repository.QAPairRepository,
 ) *MessageService {
 	return &MessageService{
 		conversations: conversations,
 		messages:      messages,
+		qaPairs:       qaPairs,
 		validate:      validator.New(),
 	}
 }
@@ -81,14 +94,59 @@ func (s *MessageService) ReplyMessage(ctx context.Context, req dto.ReplyMessageR
 		return nil, fmt.Errorf("%w: %w", ErrInvalidInput, err)
 	}
 
-	msg := &domain.Message{
-		ID:         uuid.New(),
-		SenderType: domain.SenderTypeOperator,
-		Body:       req.Body,
-		SentAt:     time.Now().UTC(),
+	conv, err := s.conversations.GetByID(ctx, req.ConversationID)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return nil, ErrConversationNotFound
+		}
+		return nil, fmt.Errorf("get conversation: %w", err)
 	}
 
-	return s.appendToConversation(ctx, req.ConversationID, msg)
+	if conv.Status == domain.ConversationStatusClosed {
+		return nil, ErrConversationClosed
+	}
+
+	now := time.Now().UTC()
+	msg := &domain.Message{
+		ID:             uuid.New(),
+		ConversationID: conv.ID,
+		SenderType:     domain.SenderTypeOperator,
+		Body:           req.Body,
+		SentAt:         now,
+	}
+
+	conversationID := conv.ID
+	pair := &domain.QAPair{
+		ID:             uuid.New(),
+		ConversationID: &conversationID,
+		Question:       req.Question,
+		Answer:         req.Body,
+		AnswerSource:   domain.AnswerSource(req.AnswerSource),
+		TemplateID:     req.TemplateID,
+	}
+
+	payload, err := json.Marshal(dto.QAPairCreatedEvent{
+		QAPairID: pair.ID,
+		Question: pair.Question,
+		Answer:   pair.Answer,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("marshal qa pair created event: %w", err)
+	}
+
+	event := &domain.OutboxEvent{
+		ID:          uuid.New(),
+		EventType:   domain.EventTypeQAPairCreated,
+		AggregateID: pair.ID,
+		Payload:     payload,
+		CreatedAt:   now,
+	}
+
+	if err := s.qaPairs.CreateWithMessageAndOutbox(ctx, msg, pair, event); err != nil {
+		return nil, fmt.Errorf("create reply with qa pair: %w", err)
+	}
+
+	return &dto.SendMessageResponse{ConversationID: conv.ID}, nil
 }
 
 func (s *MessageService) appendToConversation(

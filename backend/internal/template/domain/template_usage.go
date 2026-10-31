@@ -14,14 +14,14 @@ const (
 )
 
 type TemplateUsage struct {
-	ID             uuid.UUID
-	TemplateID     uuid.UUID
-	ConversationID *uuid.UUID
-	QAPairID       *uuid.UUID
-	UsedAs         TemplateUsedAs
-	SuggestedBody  string
-	FinalBody      string
-	Score          *float64
-	OperatorID     *string
-	CreatedAt      time.Time
+	ID             uuid.UUID      `db:"id"`
+	TemplateID     uuid.UUID      `db:"template_id"`
+	ConversationID *uuid.UUID      `db:"conversation_id"`
+	QAPairID       *uuid.UUID      `db:"qa_pair_id"`
+	UsedAs         TemplateUsedAs `db:"used_as"`
+	SuggestedBody  string         `db:"suggested_body"`
+	FinalBody      string         `db:"final_body"`
+	Score          *float64       `db:"score"`
+	OperatorID     *string        `db:"operator_id"`
+	CreatedAt      time.Time      `db:"created_at"`
 }

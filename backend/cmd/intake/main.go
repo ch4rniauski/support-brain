@@ -12,6 +12,8 @@ import (
 	"github.com/ch4rniauski/support-brain/internal/intake/api"
 	"github.com/ch4rniauski/support-brain/internal/intake/config"
 	"github.com/ch4rniauski/support-brain/internal/intake/handler"
+	intakekafka "github.com/ch4rniauski/support-brain/internal/intake/kafka"
+	"github.com/ch4rniauski/support-brain/internal/intake/outbox"
 	"github.com/ch4rniauski/support-brain/internal/intake/postgres"
 	"github.com/ch4rniauski/support-brain/internal/intake/repository"
 	"github.com/ch4rniauski/support-brain/internal/intake/service"
@@ -42,8 +44,27 @@ func main() {
 
 	conversationRepo := repository.NewConversationRepository(pool)
 	messageRepo := repository.NewMessageRepository(pool)
-	messageService := service.NewMessageService(conversationRepo, messageRepo)
+	qaPairRepo := repository.NewQAPairRepository(pool)
+	outboxRepo := repository.NewOutboxRepository(pool)
+
+	messageService := service.NewMessageService(conversationRepo, messageRepo, qaPairRepo)
 	messageHandler := handler.NewMessageHandler(messageService)
+
+	producer := intakekafka.NewProducer(cfg.Kafka.Brokers)
+	defer func() {
+		if err := producer.Close(); err != nil {
+			log.Printf("close kafka producer: %v", err)
+		}
+	}()
+
+	publisher := outbox.NewPublisher(
+		outboxRepo,
+		producer,
+		cfg.Kafka.QAPairTopic,
+		cfg.Outbox.PollInterval,
+		cfg.Outbox.BatchSize,
+	)
+	go publisher.Run(ctx)
 
 	server := &http.Server{
 		Addr:              fmt.Sprintf(":%s", cfg.HTTP.Port),

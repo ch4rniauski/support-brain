@@ -11,11 +11,11 @@ const (
 )
 
 type QAPair struct {
-	ID             uuid.UUID
-	ConversationID *uuid.UUID
-	Question       string
-	Answer         string
-	AnswerSource   AnswerSource
-	TemplateID     *uuid.UUID
-	OperatorID     *string
+	ID             uuid.UUID    `db:"id"`
+	ConversationID *uuid.UUID   `db:"conversation_id"`
+	Question       string       `db:"question"`
+	Answer         string       `db:"answer"`
+	AnswerSource   AnswerSource `db:"answer_source"`
+	TemplateID     *uuid.UUID   `db:"template_id"`
+	OperatorID     *string      `db:"operator_id"`
 }

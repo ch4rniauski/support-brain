@@ -16,14 +16,14 @@ const (
 )
 
 type GenerationJob struct {
-	ID            uuid.UUID
-	ClusterID     uuid.UUID
-	Status        GenerationJobStatus
-	ModelName     string
-	PromptVersion string
-	OutputText    *string
-	ErrorMessage  *string
-	Attempts      int
-	StartedAt     *time.Time
-	FinishedAt    *time.Time
+	ID            uuid.UUID           `db:"id"`
+	ClusterID     uuid.UUID           `db:"cluster_id"`
+	Status        GenerationJobStatus `db:"status"`
+	ModelName     string              `db:"model_name"`
+	PromptVersion string              `db:"prompt_version"`
+	OutputText    *string             `db:"output_text"`
+	ErrorMessage  *string             `db:"error_message"`
+	Attempts      int                 `db:"attempts"`
+	StartedAt     *time.Time          `db:"started_at"`
+	FinishedAt    *time.Time          `db:"finished_at"`
 }

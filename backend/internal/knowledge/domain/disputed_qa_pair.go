@@ -14,9 +14,9 @@ const (
 )
 
 type DisputedQAPair struct {
-	ID                   uuid.UUID
-	QAPairID             uuid.UUID
-	Status               DisputedQAPairStatus
-	ResolutionClusterID  *uuid.UUID
-	ResolvedAt           *time.Time
+	ID                  uuid.UUID            `db:"id"`
+	QAPairID            uuid.UUID            `db:"qa_pair_id"`
+	Status              DisputedQAPairStatus `db:"status"`
+	ResolutionClusterID *uuid.UUID           `db:"resolution_cluster_id"`
+	ResolvedAt          *time.Time           `db:"resolved_at"`
 }

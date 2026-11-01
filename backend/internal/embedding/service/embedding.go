@@ -28,10 +28,11 @@ type embedder interface {
 
 type embeddingStore interface {
 	ExistsInInbox(ctx context.Context, idempotencyKey uuid.UUID) (bool, error)
-	SaveWithInbox(
+	SaveWithInboxAndOutbox(
 		ctx context.Context,
 		inbox *domain.InboxEvent,
 		embedding *domain.QuestionEmbedding,
+		event *domain.OutboxEvent,
 	) error
 }
 
@@ -78,6 +79,13 @@ func (s *EmbeddingService) Handle(ctx context.Context, eventType string, payload
 		return fmt.Errorf("embed question: %w", err)
 	}
 
+	outboxPayload, err := json.Marshal(dto.EmbeddingReadyEvent{
+		QAPairID: event.QAPairID,
+	})
+	if err != nil {
+		return fmt.Errorf("marshal embedding ready event: %w", err)
+	}
+
 	now := time.Now().UTC()
 	inbox := &domain.InboxEvent{
 		IdempotencyKey: event.QAPairID,
@@ -91,8 +99,15 @@ func (s *EmbeddingService) Handle(ctx context.Context, eventType string, payload
 		ModelName: s.embedder.Model(),
 		Embedding: vector,
 	}
+	outboxEvent := &domain.OutboxEvent{
+		ID:          uuid.New(),
+		EventType:   domain.EventTypeEmbeddingReady,
+		AggregateID: event.QAPairID,
+		Payload:     outboxPayload,
+		CreatedAt:   now,
+	}
 
-	if err := s.store.SaveWithInbox(ctx, inbox, embedding); err != nil {
+	if err := s.store.SaveWithInboxAndOutbox(ctx, inbox, embedding, outboxEvent); err != nil {
 		if errors.Is(err, repository.ErrAlreadyProcessed) {
 			return nil
 		}

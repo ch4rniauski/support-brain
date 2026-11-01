@@ -23,11 +23,12 @@ func (r *OutboxRepository) ListUnpublished(ctx context.Context, limit int) ([]do
 		SELECT id, event_type, aggregate_id, payload, created_at, published_at
 		FROM outbox_events
 		WHERE published_at IS NULL
+		  AND event_type = $1
 		ORDER BY created_at
-		LIMIT $1
+		LIMIT $2
 	`
 
-	rows, err := r.pool.Query(ctx, query, limit)
+	rows, err := r.pool.Query(ctx, query, domain.EventTypeQAPairCreated, limit)
 	if err != nil {
 		return nil, fmt.Errorf("list unpublished outbox events: %w", err)
 	}

@@ -38,10 +38,11 @@ func (r *EmbeddingRepository) ExistsInInbox(ctx context.Context, idempotencyKey 
 	return true, nil
 }
 
-func (r *EmbeddingRepository) SaveWithInbox(
+func (r *EmbeddingRepository) SaveWithInboxAndOutbox(
 	ctx context.Context,
 	inbox *domain.InboxEvent,
 	embedding *domain.QuestionEmbedding,
+	event *domain.OutboxEvent,
 ) error {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
@@ -82,6 +83,23 @@ func (r *EmbeddingRepository) SaveWithInbox(
 	)
 	if err != nil {
 		return fmt.Errorf("insert question embedding: %w", err)
+	}
+
+	const insertOutbox = `
+		INSERT INTO outbox_events (id, event_type, aggregate_id, payload, created_at)
+		VALUES ($1, $2, $3, $4, $5)
+	`
+	_, err = tx.Exec(
+		ctx,
+		insertOutbox,
+		event.ID,
+		event.EventType,
+		event.AggregateID,
+		event.Payload,
+		event.CreatedAt,
+	)
+	if err != nil {
+		return fmt.Errorf("insert outbox event: %w", err)
 	}
 
 	if err := tx.Commit(ctx); err != nil {

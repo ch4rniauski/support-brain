@@ -13,6 +13,7 @@ type Config struct {
 	Kafka    KafkaConfig
 	Ollama   OllamaConfig
 	Consumer ConsumerConfig
+	Outbox   OutboxConfig
 }
 
 type HTTPConfig struct {
@@ -28,9 +29,10 @@ type PostgresConfig struct {
 }
 
 type KafkaConfig struct {
-	Brokers       []string `envconfig:"KAFKA_BROKERS" default:"localhost:9092"`
-	QAPairTopic   string   `envconfig:"KAFKA_QA_PAIR_TOPIC" default:"qa-pairs"`
-	ConsumerGroup string   `envconfig:"KAFKA_EMBEDDING_GROUP" default:"embedding-service"`
+	Brokers        []string `envconfig:"KAFKA_BROKERS" default:"localhost:9092"`
+	QAPairTopic    string   `envconfig:"KAFKA_QA_PAIR_TOPIC" default:"qa-pairs"`
+	EmbeddingTopic string   `envconfig:"KAFKA_EMBEDDING_TOPIC" default:"embeddings"`
+	ConsumerGroup  string   `envconfig:"KAFKA_EMBEDDING_GROUP" default:"embedding-service"`
 }
 
 type OllamaConfig struct {
@@ -42,6 +44,11 @@ type ConsumerConfig struct {
 	MaxAttempts    int           `envconfig:"EMBEDDING_CONSUMER_MAX_ATTEMPTS" default:"5"`
 	InitialBackoff time.Duration `envconfig:"EMBEDDING_CONSUMER_INITIAL_BACKOFF" default:"1s"`
 	MaxBackoff     time.Duration `envconfig:"EMBEDDING_CONSUMER_MAX_BACKOFF" default:"30s"`
+}
+
+type OutboxConfig struct {
+	PollInterval time.Duration `envconfig:"OUTBOX_POLL_INTERVAL" default:"1s"`
+	BatchSize    int           `envconfig:"OUTBOX_BATCH_SIZE" default:"100"`
 }
 
 func Load() (*Config, error) {

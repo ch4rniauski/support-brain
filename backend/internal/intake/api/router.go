@@ -20,7 +20,7 @@ func NewRouter(messageHandler *handler.MessageHandler, authMiddleware *auth.Midd
 	r.Group(func(r chi.Router) {
 		r.Use(authMiddleware.Authenticate)
 		r.Use(authMiddleware.RequireRoles(auth.RoleOperator))
-		r.Post("/messages/reply", messageHandler.ReplyMessage)
+		r.Post("/messages/replies", messageHandler.ReplyMessage)
 	})
 
 	return r

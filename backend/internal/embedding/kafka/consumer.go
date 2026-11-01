@@ -56,7 +56,7 @@ func NewConsumer(
 			GroupID:        groupID,
 			MinBytes:       1,
 			MaxBytes:       10e6,
-			CommitInterval: -1,
+			CommitInterval: 0,
 			StartOffset:    kafka.FirstOffset,
 		}),
 		handler: handler,

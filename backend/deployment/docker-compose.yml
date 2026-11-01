@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: postgres:16-alpine
+    image: pgvector/pgvector:pg16
     env_file: .env
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
@@ -163,10 +163,19 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL}
+      OLLAMA_EMBEDDING_MODEL: ${OLLAMA_EMBEDDING_MODEL}
+      KAFKA_BROKERS: ${KAFKA_BROKERS}
+      KAFKA_QA_PAIR_TOPIC: ${KAFKA_QA_PAIR_TOPIC}
+      KAFKA_EMBEDDING_GROUP: ${KAFKA_EMBEDDING_GROUP}
+      EMBEDDING_CONSUMER_MAX_ATTEMPTS: ${EMBEDDING_CONSUMER_MAX_ATTEMPTS}
+      EMBEDDING_CONSUMER_INITIAL_BACKOFF: ${EMBEDDING_CONSUMER_INITIAL_BACKOFF}
+      EMBEDDING_CONSUMER_MAX_BACKOFF: ${EMBEDDING_CONSUMER_MAX_BACKOFF}
     ports:
       - "${EMBEDDING_HOST_PORT}:${HTTP_PORT}"
     depends_on:
       postgres:
+        condition: service_healthy
+      kafka:
         condition: service_healthy
       ollama:
         condition: service_started

@@ -11,7 +11,11 @@ import (
 
 	"github.com/ch4rniauski/support-brain/internal/embedding/api"
 	"github.com/ch4rniauski/support-brain/internal/embedding/config"
+	embeddingkafka "github.com/ch4rniauski/support-brain/internal/embedding/kafka"
+	"github.com/ch4rniauski/support-brain/internal/embedding/ollama"
 	"github.com/ch4rniauski/support-brain/internal/embedding/postgres"
+	"github.com/ch4rniauski/support-brain/internal/embedding/repository"
+	"github.com/ch4rniauski/support-brain/internal/embedding/service"
 )
 
 func main() {
@@ -32,6 +36,29 @@ func main() {
 		log.Fatalf("pool creation: %v", err)
 	}
 	defer pool.Close()
+
+	embeddingRepo := repository.NewEmbeddingRepository(pool)
+	ollamaClient := ollama.NewClient(cfg.Ollama.BaseURL, cfg.Ollama.EmbeddingModel)
+	embeddingService := service.NewEmbeddingService(embeddingRepo, ollamaClient)
+
+	consumer := embeddingkafka.NewConsumer(
+		cfg.Kafka.Brokers,
+		cfg.Kafka.QAPairTopic,
+		cfg.Kafka.ConsumerGroup,
+		embeddingService,
+		embeddingkafka.RetryConfig{
+			MaxAttempts:    cfg.Consumer.MaxAttempts,
+			InitialBackoff: cfg.Consumer.InitialBackoff,
+			MaxBackoff:     cfg.Consumer.MaxBackoff,
+		},
+	)
+	defer func() {
+		if err := consumer.Close(); err != nil {
+			log.Printf("close kafka consumer: %v", err)
+		}
+	}()
+
+	go consumer.Run(ctx)
 
 	server := &http.Server{
 		Addr:              fmt.Sprintf(":%s", cfg.HTTP.Port),

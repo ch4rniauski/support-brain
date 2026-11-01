@@ -16,8 +16,8 @@ const (
 type TemplateUsage struct {
 	ID             uuid.UUID      `db:"id"`
 	TemplateID     uuid.UUID      `db:"template_id"`
-	ConversationID *uuid.UUID      `db:"conversation_id"`
-	QAPairID       *uuid.UUID      `db:"qa_pair_id"`
+	ConversationID *uuid.UUID     `db:"conversation_id"`
+	QAPairID       *uuid.UUID     `db:"qa_pair_id"`
 	UsedAs         TemplateUsedAs `db:"used_as"`
 	SuggestedBody  string         `db:"suggested_body"`
 	FinalBody      string         `db:"final_body"`

@@ -26,7 +26,7 @@ func NewUserRepository(pool *pgxpool.Pool) *UserRepository {
 
 func (r *UserRepository) Create(ctx context.Context, user *domain.User) error {
 	const query = `
-		INSERT INTO users (id, login, password, role)
+		INSERT INTO users (id, login, password_hash, role)
 		VALUES ($1, $2, $3, $4)
 	`
 
@@ -51,7 +51,7 @@ func (r *UserRepository) Create(ctx context.Context, user *domain.User) error {
 
 func (r *UserRepository) GetByLogin(ctx context.Context, login string) (*domain.User, error) {
 	const query = `
-		SELECT id, login, password, role
+		SELECT id, login, password_hash, role
 		FROM users
 		WHERE login = $1
 	`

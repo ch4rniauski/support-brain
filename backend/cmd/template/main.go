@@ -11,7 +11,7 @@ import (
 
 	"github.com/ch4rniauski/support-brain/internal/template/api"
 	"github.com/ch4rniauski/support-brain/internal/template/config"
-	"github.com/ch4rniauski/support-brain/internal/template/postgres"
+	"github.com/ch4rniauski/support-brain/pkg/postgres"
 )
 
 func main() {

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/ch4rniauski/support-brain/internal/embedding/domain"
+	"github.com/ch4rniauski/support-brain/pkg/outbox"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -18,7 +19,7 @@ func NewOutboxRepository(pool *pgxpool.Pool) *OutboxRepository {
 	return &OutboxRepository{pool: pool}
 }
 
-func (r *OutboxRepository) ListUnpublished(ctx context.Context, limit int) ([]domain.OutboxEvent, error) {
+func (r *OutboxRepository) ListUnpublished(ctx context.Context, limit int) ([]outbox.Event, error) {
 	const query = `
 		SELECT id, event_type, aggregate_id, payload, created_at, published_at
 		FROM outbox_events
@@ -34,9 +35,9 @@ func (r *OutboxRepository) ListUnpublished(ctx context.Context, limit int) ([]do
 	}
 	defer rows.Close()
 
-	events := make([]domain.OutboxEvent, 0, limit)
+	events := make([]outbox.Event, 0, limit)
 	for rows.Next() {
-		var event domain.OutboxEvent
+		var event outbox.Event
 		if err := rows.Scan(
 			&event.ID,
 			&event.EventType,

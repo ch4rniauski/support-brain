@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/ch4rniauski/support-brain/internal/intake/domain"
+	"github.com/ch4rniauski/support-brain/pkg/outbox"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -20,7 +21,7 @@ func (r *QAPairRepository) CreateWithMessageAndOutbox(
 	ctx context.Context,
 	msg *domain.Message,
 	pair *domain.QAPair,
-	event *domain.OutboxEvent,
+	event *outbox.Event,
 ) error {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {

@@ -2,25 +2,14 @@ package config
 
 import (
 	"github.com/ch4rniauski/support-brain/pkg/auth"
+	pkgconfig "github.com/ch4rniauski/support-brain/pkg/config"
 	"github.com/kelseyhightower/envconfig"
 )
 
 type Config struct {
-	HTTP     HTTPConfig
-	Postgres PostgresConfig
+	HTTP     pkgconfig.HTTPConfig
+	Postgres pkgconfig.PostgresConfig
 	Auth     auth.Config
-}
-
-type HTTPConfig struct {
-	Port string `envconfig:"HTTP_PORT" default:"8080"`
-}
-
-type PostgresConfig struct {
-	Host     string `envconfig:"POSTGRES_HOST" default:"localhost"`
-	Port     string `envconfig:"POSTGRES_PORT" default:"5432"`
-	User     string `envconfig:"POSTGRES_USER" default:"postgres"`
-	Password string `envconfig:"POSTGRES_PASSWORD" default:"postgres"`
-	Database string `envconfig:"POSTGRES_DB" default:"support-brain"`
 }
 
 func Load() (*Config, error) {

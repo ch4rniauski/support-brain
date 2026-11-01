@@ -12,12 +12,12 @@ import (
 	"github.com/ch4rniauski/support-brain/internal/embedding/api"
 	"github.com/ch4rniauski/support-brain/internal/embedding/config"
 	"github.com/ch4rniauski/support-brain/internal/embedding/handler"
-	embeddingkafka "github.com/ch4rniauski/support-brain/internal/embedding/kafka"
 	"github.com/ch4rniauski/support-brain/internal/embedding/ollama"
-	"github.com/ch4rniauski/support-brain/internal/embedding/outbox"
-	"github.com/ch4rniauski/support-brain/internal/embedding/postgres"
 	"github.com/ch4rniauski/support-brain/internal/embedding/repository"
 	"github.com/ch4rniauski/support-brain/internal/embedding/service"
+	"github.com/ch4rniauski/support-brain/pkg/kafka"
+	"github.com/ch4rniauski/support-brain/pkg/outbox"
+	"github.com/ch4rniauski/support-brain/pkg/postgres"
 )
 
 func main() {
@@ -45,7 +45,7 @@ func main() {
 	embeddingService := service.NewEmbeddingService(embeddingRepo, ollamaClient)
 	similarityHandler := handler.NewSimilarityHandler(embeddingService)
 
-	producer := embeddingkafka.NewProducer(cfg.Kafka.Brokers)
+	producer := kafka.NewProducer(cfg.Kafka.Brokers)
 	defer func() {
 		if err := producer.Close(); err != nil {
 			log.Printf("close kafka producer: %v", err)
@@ -61,12 +61,12 @@ func main() {
 	)
 	go publisher.Run(ctx)
 
-	consumer := embeddingkafka.NewConsumer(
+	consumer := kafka.NewConsumer(
 		cfg.Kafka.Brokers,
 		cfg.Kafka.QAPairTopic,
 		cfg.Kafka.ConsumerGroup,
 		embeddingService,
-		embeddingkafka.RetryConfig{
+		kafka.RetryConfig{
 			MaxAttempts:    cfg.Consumer.MaxAttempts,
 			InitialBackoff: cfg.Consumer.InitialBackoff,
 			MaxBackoff:     cfg.Consumer.MaxBackoff,

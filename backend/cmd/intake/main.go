@@ -12,12 +12,12 @@ import (
 	"github.com/ch4rniauski/support-brain/internal/intake/api"
 	"github.com/ch4rniauski/support-brain/internal/intake/config"
 	"github.com/ch4rniauski/support-brain/internal/intake/handler"
-	intakekafka "github.com/ch4rniauski/support-brain/internal/intake/kafka"
-	"github.com/ch4rniauski/support-brain/internal/intake/outbox"
-	"github.com/ch4rniauski/support-brain/internal/intake/postgres"
 	"github.com/ch4rniauski/support-brain/internal/intake/repository"
 	"github.com/ch4rniauski/support-brain/internal/intake/service"
 	"github.com/ch4rniauski/support-brain/pkg/auth"
+	"github.com/ch4rniauski/support-brain/pkg/kafka"
+	"github.com/ch4rniauski/support-brain/pkg/outbox"
+	"github.com/ch4rniauski/support-brain/pkg/postgres"
 )
 
 func main() {
@@ -50,7 +50,7 @@ func main() {
 	messageService := service.NewMessageService(conversationRepo, messageRepo, qaPairRepo)
 	messageHandler := handler.NewMessageHandler(messageService)
 
-	producer := intakekafka.NewProducer(cfg.Kafka.Brokers)
+	producer := kafka.NewProducer(cfg.Kafka.Brokers)
 	defer func() {
 		if err := producer.Close(); err != nil {
 			log.Printf("close kafka producer: %v", err)

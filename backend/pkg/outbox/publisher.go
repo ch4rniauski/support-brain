@@ -5,12 +5,11 @@ import (
 	"log"
 	"time"
 
-	"github.com/ch4rniauski/support-brain/internal/embedding/domain"
 	"github.com/google/uuid"
 )
 
 type eventStore interface {
-	ListUnpublished(ctx context.Context, limit int) ([]domain.OutboxEvent, error)
+	ListUnpublished(ctx context.Context, limit int) ([]Event, error)
 	MarkPublished(ctx context.Context, id uuid.UUID, publishedAt time.Time) error
 }
 
@@ -55,7 +54,7 @@ func (p *Publisher) Run(ctx context.Context) {
 
 	for {
 		if err := p.publishPending(ctx); err != nil {
-			log.Printf("embedding outbox publisher: %v", err)
+			log.Printf("outbox publisher: %v", err)
 		}
 
 		select {

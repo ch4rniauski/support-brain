@@ -7,7 +7,6 @@ import (
 	"log"
 	"time"
 
-	"github.com/ch4rniauski/support-brain/internal/embedding/service"
 	"github.com/segmentio/kafka-go"
 )
 
@@ -71,7 +70,7 @@ func (c *Consumer) Run(ctx context.Context) {
 			if ctx.Err() != nil {
 				return
 			}
-			log.Printf("embedding kafka consumer fetch: %v", err)
+			log.Printf("kafka consumer fetch: %v", err)
 			continue
 		}
 
@@ -80,11 +79,11 @@ func (c *Consumer) Run(ctx context.Context) {
 			if ctx.Err() != nil {
 				return
 			}
-			log.Printf("embedding kafka consumer giving up on message: %v", err)
+			log.Printf("kafka consumer giving up on message: %v", err)
 		}
 
 		if err := c.reader.CommitMessages(ctx, msg); err != nil {
-			log.Printf("embedding kafka consumer commit: %v", err)
+			log.Printf("kafka consumer commit: %v", err)
 		}
 	}
 }
@@ -100,12 +99,12 @@ func (c *Consumer) processWithRetry(ctx context.Context, eventType string, paylo
 		}
 
 		lastErr = err
-		if errors.Is(err, service.ErrPermanent) {
+		if errors.Is(err, ErrPermanent) {
 			return fmt.Errorf("permanent failure: %w", err)
 		}
 
 		log.Printf(
-			"embedding kafka consumer handle attempt %d/%d: %v",
+			"kafka consumer handle attempt %d/%d: %v",
 			attempt,
 			c.retry.MaxAttempts,
 			err,

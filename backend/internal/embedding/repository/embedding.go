@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/ch4rniauski/support-brain/internal/embedding/domain"
+	"github.com/ch4rniauski/support-brain/pkg/outbox"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -105,7 +106,7 @@ func (r *EmbeddingRepository) SaveWithInboxAndOutbox(
 	ctx context.Context,
 	inbox *domain.InboxEvent,
 	embedding *domain.QuestionEmbedding,
-	event *domain.OutboxEvent,
+	event *outbox.Event,
 ) error {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {

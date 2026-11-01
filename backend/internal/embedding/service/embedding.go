@@ -11,19 +11,19 @@ import (
 	"github.com/ch4rniauski/support-brain/internal/embedding/domain"
 	"github.com/ch4rniauski/support-brain/internal/embedding/dto"
 	"github.com/ch4rniauski/support-brain/internal/embedding/repository"
+	"github.com/ch4rniauski/support-brain/pkg/kafka"
+	"github.com/ch4rniauski/support-brain/pkg/outbox"
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
 )
 
 var (
-	// ErrPermanent marks a non-retryable handler failure (bad payload, validation).
-	ErrPermanent         = errors.New("permanent")
 	ErrInvalidInput      = errors.New("invalid input")
 	ErrEmbeddingNotFound = errors.New("embedding not found")
 )
 
 func permanent(err error) error {
-	return fmt.Errorf("%w: %w", ErrPermanent, err)
+	return fmt.Errorf("%w: %w", kafka.ErrPermanent, err)
 }
 
 type embedder interface {
@@ -37,7 +37,7 @@ type embeddingStore interface {
 		ctx context.Context,
 		inbox *domain.InboxEvent,
 		embedding *domain.QuestionEmbedding,
-		event *domain.OutboxEvent,
+		event *outbox.Event,
 	) error
 	FindSimilar(
 		ctx context.Context,
@@ -143,7 +143,7 @@ func (s *EmbeddingService) Handle(ctx context.Context, eventType string, payload
 		ModelName: s.embedder.Model(),
 		Embedding: vector,
 	}
-	outboxEvent := &domain.OutboxEvent{
+	outboxEvent := &outbox.Event{
 		ID:          uuid.New(),
 		EventType:   domain.EventTypeEmbeddingReady,
 		AggregateID: event.QAPairID,

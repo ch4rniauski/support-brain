@@ -10,6 +10,7 @@ import (
 	"github.com/ch4rniauski/support-brain/internal/intake/domain"
 	"github.com/ch4rniauski/support-brain/internal/intake/dto"
 	"github.com/ch4rniauski/support-brain/internal/intake/repository"
+	"github.com/ch4rniauski/support-brain/pkg/outbox"
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
 )
@@ -34,7 +35,7 @@ type qaPairStore interface {
 		ctx context.Context,
 		msg *domain.Message,
 		pair *domain.QAPair,
-		event *domain.OutboxEvent,
+		event *outbox.Event,
 	) error
 }
 
@@ -134,7 +135,7 @@ func (s *MessageService) ReplyMessage(ctx context.Context, req dto.ReplyMessageR
 		return nil, fmt.Errorf("marshal qa pair created event: %w", err)
 	}
 
-	event := &domain.OutboxEvent{
+	event := &outbox.Event{
 		ID:          uuid.New(),
 		EventType:   domain.EventTypeQAPairCreated,
 		AggregateID: pair.ID,

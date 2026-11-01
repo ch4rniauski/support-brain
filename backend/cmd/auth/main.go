@@ -12,10 +12,10 @@ import (
 	"github.com/ch4rniauski/support-brain/internal/auth/api"
 	"github.com/ch4rniauski/support-brain/internal/auth/config"
 	"github.com/ch4rniauski/support-brain/internal/auth/handler"
-	"github.com/ch4rniauski/support-brain/internal/auth/postgres"
 	"github.com/ch4rniauski/support-brain/internal/auth/repository"
 	"github.com/ch4rniauski/support-brain/internal/auth/service"
 	"github.com/ch4rniauski/support-brain/pkg/auth"
+	"github.com/ch4rniauski/support-brain/pkg/postgres"
 )
 
 func main() {

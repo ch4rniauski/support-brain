@@ -11,6 +11,7 @@ import (
 
 	"github.com/ch4rniauski/support-brain/internal/embedding/api"
 	"github.com/ch4rniauski/support-brain/internal/embedding/config"
+	"github.com/ch4rniauski/support-brain/internal/embedding/handler"
 	embeddingkafka "github.com/ch4rniauski/support-brain/internal/embedding/kafka"
 	"github.com/ch4rniauski/support-brain/internal/embedding/ollama"
 	"github.com/ch4rniauski/support-brain/internal/embedding/outbox"
@@ -42,6 +43,7 @@ func main() {
 	outboxRepo := repository.NewOutboxRepository(pool)
 	ollamaClient := ollama.NewClient(cfg.Ollama.BaseURL, cfg.Ollama.EmbeddingModel)
 	embeddingService := service.NewEmbeddingService(embeddingRepo, ollamaClient)
+	similarityHandler := handler.NewSimilarityHandler(embeddingService)
 
 	producer := embeddingkafka.NewProducer(cfg.Kafka.Brokers)
 	defer func() {
@@ -80,7 +82,7 @@ func main() {
 
 	server := &http.Server{
 		Addr:              fmt.Sprintf(":%s", cfg.HTTP.Port),
-		Handler:           api.NewRouter(),
+		Handler:           api.NewRouter(similarityHandler),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 

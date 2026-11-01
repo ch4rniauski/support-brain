@@ -13,7 +13,10 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-var ErrAlreadyProcessed = errors.New("event already processed")
+var (
+	ErrAlreadyProcessed  = errors.New("event already processed")
+	ErrEmbeddingNotFound = errors.New("embedding not found")
+)
 
 type EmbeddingRepository struct {
 	pool *pgxpool.Pool
@@ -36,6 +39,66 @@ func (r *EmbeddingRepository) ExistsInInbox(ctx context.Context, idempotencyKey 
 	}
 
 	return true, nil
+}
+
+func (r *EmbeddingRepository) FindSimilar(
+	ctx context.Context,
+	qaPairID uuid.UUID,
+	modelName string,
+	threshold float64,
+	limit int,
+) ([]domain.SimilarQuestion, error) {
+	const existsQuery = `
+		SELECT 1
+		FROM question_embeddings
+		WHERE qa_pair_id = $1 AND model_name = $2
+	`
+	var exists int
+	err := r.pool.QueryRow(ctx, existsQuery, qaPairID, modelName).Scan(&exists)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrEmbeddingNotFound
+		}
+		return nil, fmt.Errorf("check source embedding: %w", err)
+	}
+
+	const query = `
+		WITH query AS (
+			SELECT embedding
+			FROM question_embeddings
+			WHERE qa_pair_id = $1 AND model_name = $2
+		)
+		SELECT
+			qe.qa_pair_id,
+			1 - (qe.embedding <=> query.embedding) AS score
+		FROM question_embeddings qe
+		CROSS JOIN query
+		WHERE qe.model_name = $2
+		  AND qe.qa_pair_id <> $1
+		  AND 1 - (qe.embedding <=> query.embedding) >= $3
+		ORDER BY qe.embedding <=> query.embedding
+		LIMIT $4
+	`
+
+	rows, err := r.pool.Query(ctx, query, qaPairID, modelName, threshold, limit)
+	if err != nil {
+		return nil, fmt.Errorf("find similar embeddings: %w", err)
+	}
+	defer rows.Close()
+
+	results := make([]domain.SimilarQuestion, 0, limit)
+	for rows.Next() {
+		var item domain.SimilarQuestion
+		if err := rows.Scan(&item.QAPairID, &item.Score); err != nil {
+			return nil, fmt.Errorf("scan similar embedding: %w", err)
+		}
+		results = append(results, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate similar embeddings: %w", err)
+	}
+
+	return results, nil
 }
 
 func (r *EmbeddingRepository) SaveWithInboxAndOutbox(

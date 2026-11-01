@@ -11,11 +11,16 @@ import (
 	"github.com/ch4rniauski/support-brain/internal/embedding/domain"
 	"github.com/ch4rniauski/support-brain/internal/embedding/dto"
 	"github.com/ch4rniauski/support-brain/internal/embedding/repository"
+	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
 )
 
-// ErrPermanent marks a non-retryable handler failure (bad payload, validation).
-var ErrPermanent = errors.New("permanent")
+var (
+	// ErrPermanent marks a non-retryable handler failure (bad payload, validation).
+	ErrPermanent         = errors.New("permanent")
+	ErrInvalidInput      = errors.New("invalid input")
+	ErrEmbeddingNotFound = errors.New("embedding not found")
+)
 
 func permanent(err error) error {
 	return fmt.Errorf("%w: %w", ErrPermanent, err)
@@ -34,18 +39,57 @@ type embeddingStore interface {
 		embedding *domain.QuestionEmbedding,
 		event *domain.OutboxEvent,
 	) error
+	FindSimilar(
+		ctx context.Context,
+		qaPairID uuid.UUID,
+		modelName string,
+		threshold float64,
+		limit int,
+	) ([]domain.SimilarQuestion, error)
 }
 
 type EmbeddingService struct {
 	store    embeddingStore
 	embedder embedder
+	validate *validator.Validate
 }
 
 func NewEmbeddingService(store *repository.EmbeddingRepository, embedder embedder) *EmbeddingService {
 	return &EmbeddingService{
 		store:    store,
 		embedder: embedder,
+		validate: validator.New(),
 	}
+}
+
+func (s *EmbeddingService) FindSimilar(
+	ctx context.Context,
+	req dto.FindSimilarRequest,
+) (*dto.FindSimilarResponse, error) {
+	if err := s.validate.Struct(req); err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrInvalidInput, err)
+	}
+
+	matches, err := s.store.FindSimilar(ctx, req.QAPairID, req.ModelName, req.Threshold, req.Limit)
+	if err != nil {
+		if errors.Is(err, repository.ErrEmbeddingNotFound) {
+			return nil, ErrEmbeddingNotFound
+		}
+		return nil, err
+	}
+
+	results := make([]dto.SimilarResult, 0, len(matches))
+	for _, match := range matches {
+		results = append(results, dto.SimilarResult{
+			QAPairID: match.QAPairID,
+			Score:    match.Score,
+		})
+	}
+
+	return &dto.FindSimilarResponse{
+		QAPairID: req.QAPairID,
+		Results:  results,
+	}, nil
 }
 
 func (s *EmbeddingService) Handle(ctx context.Context, eventType string, payload []byte) error {

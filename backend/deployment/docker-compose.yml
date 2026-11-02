@@ -72,6 +72,7 @@ services:
         echo "waiting for ollama..."
         until ollama list >/dev/null 2>&1; do sleep 2; done
         ollama pull ${OLLAMA_EMBEDDING_MODEL}
+        ollama pull ${CHAT_MODEL}
     restart: "no"
 
   auth:
@@ -186,12 +187,31 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
-      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL}
+      LLM_BASE_URL: ${OLLAMA_BASE_URL}
+      CHAT_MODEL: ${CHAT_MODEL}
+      PROMPT_VERSION: ${PROMPT_VERSION}
+      MAX_ATTEMPTS: ${MAX_ATTEMPTS}
+      MAX_OUTPUT_CHARS: ${MAX_OUTPUT_CHARS}
+      MIN_OUTPUT_CHARS: ${MIN_OUTPUT_CHARS}
+      INTAKE_BASE_URL: ${INTAKE_BASE_URL}
+      KAFKA_BROKERS: ${KAFKA_BROKERS}
+      KAFKA_CLUSTER_TOPIC: ${KAFKA_CLUSTER_TOPIC}
+      KAFKA_TEMPLATE_TOPIC: ${KAFKA_TEMPLATE_TOPIC}
+      KAFKA_GENERATOR_GROUP: ${KAFKA_GENERATOR_GROUP}
+      OUTBOX_POLL_INTERVAL: ${OUTBOX_POLL_INTERVAL}
+      OUTBOX_BATCH_SIZE: ${OUTBOX_BATCH_SIZE}
+      GENERATOR_CONSUMER_MAX_ATTEMPTS: ${GENERATOR_CONSUMER_MAX_ATTEMPTS}
+      GENERATOR_CONSUMER_INITIAL_BACKOFF: ${GENERATOR_CONSUMER_INITIAL_BACKOFF}
+      GENERATOR_CONSUMER_MAX_BACKOFF: ${GENERATOR_CONSUMER_MAX_BACKOFF}
     ports:
       - "${GENERATOR_HOST_PORT}:${HTTP_PORT}"
     depends_on:
       postgres:
         condition: service_healthy
+      kafka:
+        condition: service_healthy
+      intake:
+        condition: service_started
       ollama:
         condition: service_started
       ollama-init:

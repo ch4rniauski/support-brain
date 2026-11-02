@@ -4,9 +4,11 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/ch4rniauski/support-brain/internal/intake/dto"
 	"github.com/ch4rniauski/support-brain/internal/intake/service"
+	"github.com/google/uuid"
 )
 
 type MessageHandler struct {
@@ -15,6 +17,37 @@ type MessageHandler struct {
 
 func NewMessageHandler(svc *service.MessageService) *MessageHandler {
 	return &MessageHandler{service: svc}
+}
+
+func (h *MessageHandler) ListQAPairs(w http.ResponseWriter, r *http.Request) {
+	rawIDs := strings.TrimSpace(r.URL.Query().Get("ids"))
+	if rawIDs == "" {
+		writeError(w, http.StatusBadRequest, "ids query parameter is required")
+		return
+	}
+
+	parts := strings.Split(rawIDs, ",")
+	ids := make([]uuid.UUID, 0, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		id, err := uuid.Parse(part)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid qa pair id")
+			return
+		}
+		ids = append(ids, id)
+	}
+
+	resp, err := h.service.ListQAPairs(r.Context(), ids)
+	if err != nil {
+		writeMessageError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, resp)
 }
 
 func (h *MessageHandler) SendMessage(w http.ResponseWriter, r *http.Request) {

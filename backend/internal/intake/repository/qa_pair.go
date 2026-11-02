@@ -6,6 +6,7 @@ import (
 
 	"github.com/ch4rniauski/support-brain/internal/intake/domain"
 	"github.com/ch4rniauski/support-brain/pkg/outbox"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -15,6 +16,46 @@ type QAPairRepository struct {
 
 func NewQAPairRepository(pool *pgxpool.Pool) *QAPairRepository {
 	return &QAPairRepository{pool: pool}
+}
+
+func (r *QAPairRepository) ListByIDs(ctx context.Context, ids []uuid.UUID) ([]domain.QAPair, error) {
+	if len(ids) == 0 {
+		return []domain.QAPair{}, nil
+	}
+
+	const query = `
+		SELECT id, conversation_id, question, answer, answer_source, template_id, operator_id
+		FROM qa_pairs
+		WHERE id = ANY($1)
+	`
+
+	rows, err := r.pool.Query(ctx, query, ids)
+	if err != nil {
+		return nil, fmt.Errorf("list qa pairs by ids: %w", err)
+	}
+	defer rows.Close()
+
+	pairs := make([]domain.QAPair, 0, len(ids))
+	for rows.Next() {
+		var pair domain.QAPair
+		if err := rows.Scan(
+			&pair.ID,
+			&pair.ConversationID,
+			&pair.Question,
+			&pair.Answer,
+			&pair.AnswerSource,
+			&pair.TemplateID,
+			&pair.OperatorID,
+		); err != nil {
+			return nil, fmt.Errorf("scan qa pair: %w", err)
+		}
+		pairs = append(pairs, pair)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate qa pairs: %w", err)
+	}
+
+	return pairs, nil
 }
 
 func (r *QAPairRepository) CreateWithMessageAndOutbox(

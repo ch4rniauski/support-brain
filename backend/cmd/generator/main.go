@@ -10,7 +10,13 @@ import (
 	"time"
 
 	"github.com/ch4rniauski/support-brain/internal/generator/api"
+	"github.com/ch4rniauski/support-brain/internal/generator/client"
 	"github.com/ch4rniauski/support-brain/internal/generator/config"
+	"github.com/ch4rniauski/support-brain/internal/generator/ollama"
+	"github.com/ch4rniauski/support-brain/internal/generator/repository"
+	"github.com/ch4rniauski/support-brain/internal/generator/service"
+	"github.com/ch4rniauski/support-brain/pkg/kafka"
+	"github.com/ch4rniauski/support-brain/pkg/outbox"
 	"github.com/ch4rniauski/support-brain/pkg/postgres"
 )
 
@@ -32,6 +38,59 @@ func main() {
 		log.Fatalf("pool creation: %v", err)
 	}
 	defer pool.Close()
+
+	jobRepo := repository.NewJobRepository(pool)
+	outboxRepo := repository.NewOutboxRepository(pool)
+	intakeClient := client.NewIntakeClient(cfg.Intake.BaseURL)
+	llmClient := ollama.NewClient(cfg.LLM.BaseURL, cfg.LLM.ChatModel)
+
+	generatorService := service.NewGeneratorService(
+		jobRepo,
+		intakeClient,
+		llmClient,
+		service.GeneratorConfig{
+			ModelName:      cfg.LLM.ChatModel,
+			PromptVersion:  cfg.Generation.PromptVersion,
+			MaxAttempts:    cfg.Generation.MaxAttempts,
+			MaxOutputChars: cfg.Generation.MaxOutputChars,
+			MinOutputChars: cfg.Generation.MinOutputChars,
+		},
+	)
+
+	producer := kafka.NewProducer(cfg.Kafka.Brokers)
+	defer func() {
+		if err := producer.Close(); err != nil {
+			log.Printf("close kafka producer: %v", err)
+		}
+	}()
+
+	publisher := outbox.NewPublisher(
+		outboxRepo,
+		producer,
+		cfg.Kafka.TemplateTopic,
+		cfg.Outbox.PollInterval,
+		cfg.Outbox.BatchSize,
+	)
+	go publisher.Run(ctx)
+
+	consumer := kafka.NewConsumer(
+		cfg.Kafka.Brokers,
+		cfg.Kafka.ClusterTopic,
+		cfg.Kafka.ConsumerGroup,
+		generatorService,
+		kafka.RetryConfig{
+			MaxAttempts:    cfg.Consumer.MaxAttempts,
+			InitialBackoff: cfg.Consumer.InitialBackoff,
+			MaxBackoff:     cfg.Consumer.MaxBackoff,
+		},
+	)
+	defer func() {
+		if err := consumer.Close(); err != nil {
+			log.Printf("close kafka consumer: %v", err)
+		}
+	}()
+
+	go consumer.Run(ctx)
 
 	server := &http.Server{
 		Addr:              fmt.Sprintf(":%s", cfg.HTTP.Port),

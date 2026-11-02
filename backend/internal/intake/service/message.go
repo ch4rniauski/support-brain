@@ -31,6 +31,7 @@ type messageStore interface {
 }
 
 type qaPairStore interface {
+	ListByIDs(ctx context.Context, ids []uuid.UUID) ([]domain.QAPair, error)
 	CreateWithMessageAndOutbox(
 		ctx context.Context,
 		msg *domain.Message,
@@ -88,6 +89,28 @@ func (s *MessageService) SendMessage(ctx context.Context, req dto.SendMessageReq
 	}
 
 	return s.appendToConversation(ctx, *req.ConversationID, msg)
+}
+
+func (s *MessageService) ListQAPairs(ctx context.Context, ids []uuid.UUID) (*dto.ListQAPairsResponse, error) {
+	if len(ids) == 0 {
+		return nil, fmt.Errorf("%w: ids are required", ErrInvalidInput)
+	}
+
+	pairs, err := s.qaPairs.ListByIDs(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+
+	items := make([]dto.QAPairItem, 0, len(pairs))
+	for _, pair := range pairs {
+		items = append(items, dto.QAPairItem{
+			ID:       pair.ID,
+			Question: pair.Question,
+			Answer:   pair.Answer,
+		})
+	}
+
+	return &dto.ListQAPairsResponse{Items: items}, nil
 }
 
 func (s *MessageService) ReplyMessage(ctx context.Context, req dto.ReplyMessageRequest) (*dto.SendMessageResponse, error) {

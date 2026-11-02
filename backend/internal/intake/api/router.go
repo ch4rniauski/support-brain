@@ -16,6 +16,7 @@ func NewRouter(messageHandler *handler.MessageHandler, authMiddleware *auth.Midd
 	r.Use(middleware.Heartbeat("/health"))
 
 	r.Post("/messages", messageHandler.SendMessage)
+	r.Get("/qa-pairs", messageHandler.ListQAPairs)
 
 	r.Group(func(r chi.Router) {
 		r.Use(authMiddleware.Authenticate)

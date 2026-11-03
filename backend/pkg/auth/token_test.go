@@ -103,3 +103,143 @@ func TestTokenManager_Issue(t *testing.T) {
 		}
 	})
 }
+
+func signToken(t *testing.T, method jwt.SigningMethod, secret []byte, claims Claims) string {
+	t.Helper()
+
+	token := jwt.NewWithClaims(method, claims)
+	signed, err := token.SignedString(secret)
+	if err != nil {
+		t.Fatalf("sign token: %v", err)
+	}
+	return signed
+}
+
+func TestTokenManager_Parse(t *testing.T) {
+	t.Parallel()
+
+	const secret = "test-secret"
+	manager := NewTokenManager(secret, time.Hour)
+
+	t.Run("parses valid token", func(t *testing.T) {
+		t.Parallel()
+
+		token, err := manager.Issue(RoleOperator)
+		if err != nil {
+			t.Fatalf("Issue() error = %v", err)
+		}
+
+		claims, err := manager.Parse(token)
+		if err != nil {
+			t.Fatalf("Parse() error = %v", err)
+		}
+		if claims.Role != RoleOperator {
+			t.Errorf("Role = %q, want %q", claims.Role, RoleOperator)
+		}
+		if claims.ExpiresAt == nil {
+			t.Fatal("expected ExpiresAt to be set")
+		}
+	})
+
+	t.Run("rejects malformed token", func(t *testing.T) {
+		t.Parallel()
+
+		tests := []struct {
+			name  string
+			token string
+		}{
+			{name: "empty", token: ""},
+			{name: "not a jwt", token: "not-a-jwt"},
+			{name: "truncated", token: "a.b"},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				t.Parallel()
+
+				claims, err := manager.Parse(tt.token)
+				if !errors.Is(err, ErrInvalidToken) {
+					t.Fatalf("error = %v, want %v", err, ErrInvalidToken)
+				}
+				if claims != nil {
+					t.Errorf("claims = %#v, want nil", claims)
+				}
+			})
+		}
+	})
+
+	t.Run("rejects token signed with another secret", func(t *testing.T) {
+		t.Parallel()
+
+		other := NewTokenManager("other-secret", time.Hour)
+		token, err := other.Issue(RoleClient)
+		if err != nil {
+			t.Fatalf("Issue() error = %v", err)
+		}
+
+		claims, err := manager.Parse(token)
+		if !errors.Is(err, ErrInvalidToken) {
+			t.Fatalf("error = %v, want %v", err, ErrInvalidToken)
+		}
+		if claims != nil {
+			t.Errorf("claims = %#v, want nil", claims)
+		}
+	})
+
+	t.Run("rejects expired token", func(t *testing.T) {
+		t.Parallel()
+
+		token := signToken(t, jwt.SigningMethodHS256, []byte(secret), Claims{
+			Role: RoleClient,
+			RegisteredClaims: jwt.RegisteredClaims{
+				ExpiresAt: jwt.NewNumericDate(time.Now().UTC().Add(-time.Minute)),
+			},
+		})
+
+		claims, err := manager.Parse(token)
+		if !errors.Is(err, ErrInvalidToken) {
+			t.Fatalf("error = %v, want %v", err, ErrInvalidToken)
+		}
+		if claims != nil {
+			t.Errorf("claims = %#v, want nil", claims)
+		}
+	})
+
+	t.Run("rejects unexpected signing method", func(t *testing.T) {
+		t.Parallel()
+
+		token := signToken(t, jwt.SigningMethodHS384, []byte(secret), Claims{
+			Role: RoleClient,
+			RegisteredClaims: jwt.RegisteredClaims{
+				ExpiresAt: jwt.NewNumericDate(time.Now().UTC().Add(time.Hour)),
+			},
+		})
+
+		claims, err := manager.Parse(token)
+		if !errors.Is(err, ErrInvalidToken) {
+			t.Fatalf("error = %v, want %v", err, ErrInvalidToken)
+		}
+		if claims != nil {
+			t.Errorf("claims = %#v, want nil", claims)
+		}
+	})
+
+	t.Run("rejects invalid role claim", func(t *testing.T) {
+		t.Parallel()
+
+		token := signToken(t, jwt.SigningMethodHS256, []byte(secret), Claims{
+			Role: "admin",
+			RegisteredClaims: jwt.RegisteredClaims{
+				ExpiresAt: jwt.NewNumericDate(time.Now().UTC().Add(time.Hour)),
+			},
+		})
+
+		claims, err := manager.Parse(token)
+		if !errors.Is(err, ErrInvalidRole) {
+			t.Fatalf("error = %v, want %v", err, ErrInvalidRole)
+		}
+		if claims != nil {
+			t.Errorf("claims = %#v, want nil", claims)
+		}
+	})
+}

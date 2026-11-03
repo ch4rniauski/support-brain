@@ -91,6 +91,56 @@ func (r *TemplateRepository) CreateDraft(ctx context.Context, template *domain.T
 	return nil
 }
 
+func (r *TemplateRepository) ListByStatus(
+	ctx context.Context,
+	status domain.TemplateStatus,
+) ([]domain.Template, error) {
+	const query = `
+		SELECT
+			id,
+			cluster_id,
+			status,
+			version,
+			body,
+			generation_job_id,
+			used_count,
+			approved_at
+		FROM templates
+		WHERE status = $1
+		ORDER BY id
+	`
+
+	rows, err := r.pool.Query(ctx, query, status)
+	if err != nil {
+		return nil, fmt.Errorf("list templates by status: %w", err)
+	}
+	defer rows.Close()
+
+	templates := make([]domain.Template, 0)
+	for rows.Next() {
+		var template domain.Template
+		if err := rows.Scan(
+			&template.ID,
+			&template.ClusterID,
+			&template.Status,
+			&template.Version,
+			&template.Body,
+			&template.GenerationJobID,
+			&template.UsedCount,
+			&template.ApprovedAt,
+		); err != nil {
+			return nil, fmt.Errorf("scan template: %w", err)
+		}
+		templates = append(templates, template)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate templates: %w", err)
+	}
+
+	return templates, nil
+}
+
 func isUniqueViolation(err error) bool {
 	var pgErr *pgconn.PgError
 	if errors.As(err, &pgErr) {

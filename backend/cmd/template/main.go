@@ -11,8 +11,10 @@ import (
 
 	"github.com/ch4rniauski/support-brain/internal/template/api"
 	"github.com/ch4rniauski/support-brain/internal/template/config"
+	"github.com/ch4rniauski/support-brain/internal/template/handler"
 	"github.com/ch4rniauski/support-brain/internal/template/repository"
 	"github.com/ch4rniauski/support-brain/internal/template/service"
+	"github.com/ch4rniauski/support-brain/pkg/auth"
 	"github.com/ch4rniauski/support-brain/pkg/kafka"
 	"github.com/ch4rniauski/support-brain/pkg/postgres"
 )
@@ -36,8 +38,12 @@ func main() {
 	}
 	defer pool.Close()
 
+	tokenManager := auth.NewTokenManager(cfg.Auth.JWTSecret, cfg.Auth.TokenTTL)
+	authMiddleware := auth.NewMiddleware(tokenManager)
+
 	templateRepo := repository.NewTemplateRepository(pool)
 	templateService := service.NewTemplateService(templateRepo)
+	templateHandler := handler.NewTemplateHandler(templateService)
 
 	consumer := kafka.NewConsumer(
 		cfg.Kafka.Brokers,
@@ -60,7 +66,7 @@ func main() {
 
 	server := &http.Server{
 		Addr:              fmt.Sprintf(":%s", cfg.HTTP.Port),
-		Handler:           api.NewRouter(),
+		Handler:           api.NewRouter(templateHandler, authMiddleware),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 

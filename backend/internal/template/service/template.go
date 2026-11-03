@@ -19,9 +19,12 @@ func permanent(err error) error {
 	return fmt.Errorf("%w: %w", kafka.ErrPermanent, err)
 }
 
+var ErrInvalidStatus = errors.New("invalid template status")
+
 type templateStore interface {
 	ExistsByGenerationJobID(ctx context.Context, generationJobID uuid.UUID) (bool, error)
 	CreateDraft(ctx context.Context, template *domain.Template) error
+	ListByStatus(ctx context.Context, status domain.TemplateStatus) ([]domain.Template, error)
 }
 
 type TemplateService struct {
@@ -30,6 +33,48 @@ type TemplateService struct {
 
 func NewTemplateService(store templateStore) *TemplateService {
 	return &TemplateService{store: store}
+}
+
+func (s *TemplateService) ListByStatus(
+	ctx context.Context,
+	status domain.TemplateStatus,
+) (*dto.ListTemplatesResponse, error) {
+	if !isValidStatus(status) {
+		return nil, ErrInvalidStatus
+	}
+
+	templates, err := s.store.ListByStatus(ctx, status)
+	if err != nil {
+		return nil, err
+	}
+
+	items := make([]dto.TemplateItem, 0, len(templates))
+	for _, template := range templates {
+		items = append(items, dto.TemplateItem{
+			ID:              template.ID,
+			ClusterID:       template.ClusterID,
+			Status:          string(template.Status),
+			Version:         template.Version,
+			Body:            template.Body,
+			GenerationJobID: template.GenerationJobID,
+			UsedCount:       template.UsedCount,
+			ApprovedAt:      template.ApprovedAt,
+		})
+	}
+
+	return &dto.ListTemplatesResponse{Items: items}, nil
+}
+
+func isValidStatus(status domain.TemplateStatus) bool {
+	switch status {
+	case domain.TemplateStatusDraft,
+		domain.TemplateStatusApproved,
+		domain.TemplateStatusRejected,
+		domain.TemplateStatusArchived:
+		return true
+	default:
+		return false
+	}
 }
 
 func (s *TemplateService) Handle(ctx context.Context, eventType string, payload []byte) error {

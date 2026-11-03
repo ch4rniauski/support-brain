@@ -3,6 +3,7 @@ package config
 import (
 	"time"
 
+	"github.com/ch4rniauski/support-brain/pkg/auth"
 	pkgconfig "github.com/ch4rniauski/support-brain/pkg/config"
 	"github.com/kelseyhightower/envconfig"
 )
@@ -10,6 +11,7 @@ import (
 type Config struct {
 	HTTP     pkgconfig.HTTPConfig
 	Postgres pkgconfig.PostgresConfig
+	Auth     auth.Config
 	Kafka    KafkaConfig
 	Consumer ConsumerConfig
 }

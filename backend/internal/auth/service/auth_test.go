@@ -13,9 +13,9 @@ import (
 )
 
 type fakeUserStore struct {
-	createErr    error
-	createdUser  *domain.User
-	getByLogin   *domain.User
+	createErr     error
+	createdUser   *domain.User
+	getByLogin    *domain.User
 	getByLoginErr error
 }
 

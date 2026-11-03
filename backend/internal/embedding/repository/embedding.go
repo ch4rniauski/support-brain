@@ -27,16 +27,24 @@ func NewEmbeddingRepository(pool *pgxpool.Pool) *EmbeddingRepository {
 	return &EmbeddingRepository{pool: pool}
 }
 
-func (r *EmbeddingRepository) ExistsInInbox(ctx context.Context, idempotencyKey uuid.UUID) (bool, error) {
-	const query = `SELECT 1 FROM inbox_events WHERE idempotency_key = $1`
+func (r *EmbeddingRepository) ExistsByQAPairAndModel(
+	ctx context.Context,
+	qaPairID uuid.UUID,
+	modelName string,
+) (bool, error) {
+	const query = `
+		SELECT 1
+		FROM question_embeddings
+		WHERE qa_pair_id = $1 AND model_name = $2
+	`
 
 	var exists int
-	err := r.pool.QueryRow(ctx, query, idempotencyKey).Scan(&exists)
+	err := r.pool.QueryRow(ctx, query, qaPairID, modelName).Scan(&exists)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return false, nil
 		}
-		return false, fmt.Errorf("check inbox event: %w", err)
+		return false, fmt.Errorf("check question embedding: %w", err)
 	}
 
 	return true, nil
@@ -102,9 +110,8 @@ func (r *EmbeddingRepository) FindSimilar(
 	return results, nil
 }
 
-func (r *EmbeddingRepository) SaveWithInboxAndOutbox(
+func (r *EmbeddingRepository) SaveWithOutbox(
 	ctx context.Context,
-	inbox *domain.InboxEvent,
 	embedding *domain.QuestionEmbedding,
 	event *outbox.Event,
 ) error {
@@ -113,25 +120,6 @@ func (r *EmbeddingRepository) SaveWithInboxAndOutbox(
 		return fmt.Errorf("begin tx: %w", err)
 	}
 	defer tx.Rollback(ctx)
-
-	const insertInbox = `
-		INSERT INTO inbox_events (idempotency_key, event_type, payload, processed_at)
-		VALUES ($1, $2, $3, $4)
-	`
-	_, err = tx.Exec(
-		ctx,
-		insertInbox,
-		inbox.IdempotencyKey,
-		inbox.EventType,
-		inbox.Payload,
-		inbox.ProcessedAt,
-	)
-	if err != nil {
-		if isUniqueViolation(err) {
-			return ErrAlreadyProcessed
-		}
-		return fmt.Errorf("insert inbox event: %w", err)
-	}
 
 	const insertEmbedding = `
 		INSERT INTO question_embeddings (id, qa_pair_id, model_name, embedding)
@@ -146,6 +134,9 @@ func (r *EmbeddingRepository) SaveWithInboxAndOutbox(
 		vectorLiteral(embedding.Embedding),
 	)
 	if err != nil {
+		if isUniqueViolation(err) {
+			return ErrAlreadyProcessed
+		}
 		return fmt.Errorf("insert question embedding: %w", err)
 	}
 

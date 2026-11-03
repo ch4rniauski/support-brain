@@ -32,10 +32,9 @@ type embedder interface {
 }
 
 type embeddingStore interface {
-	ExistsInInbox(ctx context.Context, idempotencyKey uuid.UUID) (bool, error)
-	SaveWithInboxAndOutbox(
+	ExistsByQAPairAndModel(ctx context.Context, qaPairID uuid.UUID, modelName string) (bool, error)
+	SaveWithOutbox(
 		ctx context.Context,
-		inbox *domain.InboxEvent,
 		embedding *domain.QuestionEmbedding,
 		event *outbox.Event,
 	) error
@@ -110,7 +109,8 @@ func (s *EmbeddingService) Handle(ctx context.Context, eventType string, payload
 		return permanent(fmt.Errorf("question is required"))
 	}
 
-	exists, err := s.store.ExistsInInbox(ctx, event.QAPairID)
+	modelName := s.embedder.Model()
+	exists, err := s.store.ExistsByQAPairAndModel(ctx, event.QAPairID, modelName)
 	if err != nil {
 		return err
 	}
@@ -131,16 +131,10 @@ func (s *EmbeddingService) Handle(ctx context.Context, eventType string, payload
 	}
 
 	now := time.Now().UTC()
-	inbox := &domain.InboxEvent{
-		IdempotencyKey: event.QAPairID,
-		EventType:      dto.EventTypeQAPairCreated,
-		Payload:        payload,
-		ProcessedAt:    now,
-	}
 	embedding := &domain.QuestionEmbedding{
 		ID:        uuid.New(),
 		QAPairID:  event.QAPairID,
-		ModelName: s.embedder.Model(),
+		ModelName: modelName,
 		Embedding: vector,
 	}
 	outboxEvent := &outbox.Event{
@@ -151,7 +145,7 @@ func (s *EmbeddingService) Handle(ctx context.Context, eventType string, payload
 		CreatedAt:   now,
 	}
 
-	if err := s.store.SaveWithInboxAndOutbox(ctx, inbox, embedding, outboxEvent); err != nil {
+	if err := s.store.SaveWithOutbox(ctx, embedding, outboxEvent); err != nil {
 		if errors.Is(err, repository.ErrAlreadyProcessed) {
 			return nil
 		}

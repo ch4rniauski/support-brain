@@ -1,0 +1,8 @@
+version: "2"
+
+linters:
+  settings:
+    errcheck:
+      exclude-functions:
+        - (*net/http.Response).Close
+        - (github.com/jackc/pgx/v5.Tx).Rollback

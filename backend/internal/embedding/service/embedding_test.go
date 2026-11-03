@@ -2,12 +2,14 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 
 	"github.com/ch4rniauski/support-brain/internal/embedding/domain"
 	"github.com/ch4rniauski/support-brain/internal/embedding/dto"
 	"github.com/ch4rniauski/support-brain/internal/embedding/repository"
+	"github.com/ch4rniauski/support-brain/pkg/kafka"
 	"github.com/ch4rniauski/support-brain/pkg/outbox"
 	"github.com/google/uuid"
 )
@@ -20,11 +22,15 @@ type fakeEmbeddingStore struct {
 	lastFindThreshold float64
 	lastFindLimit     int
 
-	exists            bool
-	existsErr         error
-	saveWithOutboxErr error
-	savedEmbedding    *domain.QuestionEmbedding
-	savedEvent        *outbox.Event
+	exists              bool
+	existsErr           error
+	existsCalled        bool
+	lastExistsQAPairID  uuid.UUID
+	lastExistsModelName string
+	saveWithOutboxErr   error
+	saveCalled          bool
+	savedEmbedding      *domain.QuestionEmbedding
+	savedEvent          *outbox.Event
 }
 
 func (f *fakeEmbeddingStore) ExistsByQAPairAndModel(
@@ -32,6 +38,9 @@ func (f *fakeEmbeddingStore) ExistsByQAPairAndModel(
 	qaPairID uuid.UUID,
 	modelName string,
 ) (bool, error) {
+	f.existsCalled = true
+	f.lastExistsQAPairID = qaPairID
+	f.lastExistsModelName = modelName
 	return f.exists, f.existsErr
 }
 
@@ -40,6 +49,7 @@ func (f *fakeEmbeddingStore) SaveWithOutbox(
 	embedding *domain.QuestionEmbedding,
 	event *outbox.Event,
 ) error {
+	f.saveCalled = true
 	f.savedEmbedding = embedding
 	f.savedEvent = event
 	return f.saveWithOutboxErr
@@ -63,9 +73,11 @@ func (f *fakeEmbeddingStore) FindSimilar(
 }
 
 type fakeEmbedder struct {
-	model string
-	vec   []float32
-	err   error
+	model      string
+	vec        []float32
+	err        error
+	embedCalls int
+	lastText   string
 }
 
 func (f *fakeEmbedder) Model() string {
@@ -76,8 +88,13 @@ func (f *fakeEmbedder) Model() string {
 }
 
 func (f *fakeEmbedder) Embed(ctx context.Context, text string) ([]float32, error) {
+	f.embedCalls++
+	f.lastText = text
 	if f.err != nil {
 		return nil, f.err
+	}
+	if f.vec == nil {
+		return []float32{0.1, 0.2, 0.3}, nil
 	}
 	return f.vec, nil
 }
@@ -245,6 +262,220 @@ func TestEmbeddingService_FindSimilar(t *testing.T) {
 		}
 		if resp != nil {
 			t.Errorf("response = %#v, want nil", resp)
+		}
+	})
+}
+
+func mustMarshalQAPairCreated(t *testing.T, event dto.QAPairCreatedEvent) []byte {
+	t.Helper()
+
+	payload, err := json.Marshal(event)
+	if err != nil {
+		t.Fatalf("marshal event: %v", err)
+	}
+	return payload
+}
+
+func TestEmbeddingService_Handle(t *testing.T) {
+	t.Parallel()
+
+	qaPairID := uuid.MustParse("33333333-3333-3333-3333-333333333333")
+	validEvent := dto.QAPairCreatedEvent{
+		QAPairID: qaPairID,
+		Question: "How do I reset my password?",
+		Answer:   "Use the reset link.",
+	}
+	validPayload := mustMarshalQAPairCreated(t, validEvent)
+
+	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+
+		store := &fakeEmbeddingStore{}
+		embedder := &fakeEmbedder{
+			model: "nomic-embed-text",
+			vec:   []float32{1, 2, 3},
+		}
+		svc := NewEmbeddingService(store, embedder)
+
+		if err := svc.Handle(context.Background(), dto.EventTypeQAPairCreated, validPayload); err != nil {
+			t.Fatalf("Handle() error = %v", err)
+		}
+		if !store.existsCalled {
+			t.Fatal("expected ExistsByQAPairAndModel to be called")
+		}
+		if store.lastExistsQAPairID != qaPairID || store.lastExistsModelName != "nomic-embed-text" {
+			t.Errorf("exists args = (%v, %q)", store.lastExistsQAPairID, store.lastExistsModelName)
+		}
+		if embedder.embedCalls != 1 || embedder.lastText != validEvent.Question {
+			t.Errorf("Embed calls = %d text = %q", embedder.embedCalls, embedder.lastText)
+		}
+		if !store.saveCalled || store.savedEmbedding == nil || store.savedEvent == nil {
+			t.Fatal("expected SaveWithOutbox to be called")
+		}
+		if store.savedEmbedding.QAPairID != qaPairID {
+			t.Errorf("embedding QAPairID = %v, want %v", store.savedEmbedding.QAPairID, qaPairID)
+		}
+		if store.savedEmbedding.ModelName != "nomic-embed-text" {
+			t.Errorf("embedding ModelName = %q, want nomic-embed-text", store.savedEmbedding.ModelName)
+		}
+		if len(store.savedEmbedding.Embedding) != 3 {
+			t.Errorf("embedding vector len = %d, want 3", len(store.savedEmbedding.Embedding))
+		}
+		if store.savedEvent.EventType != domain.EventTypeEmbeddingReady {
+			t.Errorf("outbox EventType = %q, want %q", store.savedEvent.EventType, domain.EventTypeEmbeddingReady)
+		}
+		if store.savedEvent.AggregateID != qaPairID {
+			t.Errorf("outbox AggregateID = %v, want %v", store.savedEvent.AggregateID, qaPairID)
+		}
+
+		var ready dto.EmbeddingReadyEvent
+		if err := json.Unmarshal(store.savedEvent.Payload, &ready); err != nil {
+			t.Fatalf("unmarshal outbox payload: %v", err)
+		}
+		if ready.QAPairID != qaPairID {
+			t.Errorf("outbox payload QAPairID = %v, want %v", ready.QAPairID, qaPairID)
+		}
+	})
+
+	t.Run("skips unsupported event type", func(t *testing.T) {
+		t.Parallel()
+
+		store := &fakeEmbeddingStore{}
+		embedder := &fakeEmbedder{}
+		svc := NewEmbeddingService(store, embedder)
+
+		if err := svc.Handle(context.Background(), "SomethingElse", validPayload); err != nil {
+			t.Fatalf("Handle() error = %v", err)
+		}
+		if store.existsCalled || store.saveCalled || embedder.embedCalls != 0 {
+			t.Fatal("expected no store/embedder calls for unsupported event")
+		}
+	})
+
+	t.Run("empty event type is accepted", func(t *testing.T) {
+		t.Parallel()
+
+		store := &fakeEmbeddingStore{}
+		svc := NewEmbeddingService(store, &fakeEmbedder{model: "m", vec: []float32{0.5}})
+
+		if err := svc.Handle(context.Background(), "", validPayload); err != nil {
+			t.Fatalf("Handle() error = %v", err)
+		}
+		if !store.saveCalled {
+			t.Fatal("expected SaveWithOutbox for empty event type")
+		}
+	})
+
+	t.Run("invalid json is permanent", func(t *testing.T) {
+		t.Parallel()
+
+		svc := NewEmbeddingService(&fakeEmbeddingStore{}, &fakeEmbedder{})
+
+		err := svc.Handle(context.Background(), dto.EventTypeQAPairCreated, []byte("{"))
+		if !errors.Is(err, kafka.ErrPermanent) {
+			t.Fatalf("error = %v, want permanent", err)
+		}
+	})
+
+	t.Run("missing qa pair id is permanent", func(t *testing.T) {
+		t.Parallel()
+
+		payload := mustMarshalQAPairCreated(t, dto.QAPairCreatedEvent{
+			Question: "question",
+		})
+		svc := NewEmbeddingService(&fakeEmbeddingStore{}, &fakeEmbedder{})
+
+		err := svc.Handle(context.Background(), dto.EventTypeQAPairCreated, payload)
+		if !errors.Is(err, kafka.ErrPermanent) {
+			t.Fatalf("error = %v, want permanent", err)
+		}
+	})
+
+	t.Run("missing question is permanent", func(t *testing.T) {
+		t.Parallel()
+
+		payload := mustMarshalQAPairCreated(t, dto.QAPairCreatedEvent{
+			QAPairID: qaPairID,
+		})
+		svc := NewEmbeddingService(&fakeEmbeddingStore{}, &fakeEmbedder{})
+
+		err := svc.Handle(context.Background(), dto.EventTypeQAPairCreated, payload)
+		if !errors.Is(err, kafka.ErrPermanent) {
+			t.Fatalf("error = %v, want permanent", err)
+		}
+	})
+
+	t.Run("already exists is no-op", func(t *testing.T) {
+		t.Parallel()
+
+		store := &fakeEmbeddingStore{exists: true}
+		embedder := &fakeEmbedder{}
+		svc := NewEmbeddingService(store, embedder)
+
+		if err := svc.Handle(context.Background(), dto.EventTypeQAPairCreated, validPayload); err != nil {
+			t.Fatalf("Handle() error = %v", err)
+		}
+		if embedder.embedCalls != 0 {
+			t.Fatal("Embed must not be called when embedding already exists")
+		}
+		if store.saveCalled {
+			t.Fatal("SaveWithOutbox must not be called when embedding already exists")
+		}
+	})
+
+	t.Run("exists check fails", func(t *testing.T) {
+		t.Parallel()
+
+		storeErr := errors.New("db down")
+		store := &fakeEmbeddingStore{existsErr: storeErr}
+		svc := NewEmbeddingService(store, &fakeEmbedder{})
+
+		err := svc.Handle(context.Background(), dto.EventTypeQAPairCreated, validPayload)
+		if !errors.Is(err, storeErr) {
+			t.Fatalf("error = %v, want %v", err, storeErr)
+		}
+	})
+
+	t.Run("embed fails", func(t *testing.T) {
+		t.Parallel()
+
+		embedErr := errors.New("ollama down")
+		store := &fakeEmbeddingStore{}
+		svc := NewEmbeddingService(store, &fakeEmbedder{err: embedErr})
+
+		err := svc.Handle(context.Background(), dto.EventTypeQAPairCreated, validPayload)
+		if !errors.Is(err, embedErr) {
+			t.Fatalf("error = %v, want %v", err, embedErr)
+		}
+		if store.saveCalled {
+			t.Fatal("SaveWithOutbox must not be called when embed fails")
+		}
+	})
+
+	t.Run("already processed is no-op", func(t *testing.T) {
+		t.Parallel()
+
+		store := &fakeEmbeddingStore{saveWithOutboxErr: repository.ErrAlreadyProcessed}
+		svc := NewEmbeddingService(store, &fakeEmbedder{vec: []float32{1}})
+
+		if err := svc.Handle(context.Background(), dto.EventTypeQAPairCreated, validPayload); err != nil {
+			t.Fatalf("Handle() error = %v", err)
+		}
+	})
+
+	t.Run("save fails", func(t *testing.T) {
+		t.Parallel()
+
+		saveErr := errors.New("save failed")
+		store := &fakeEmbeddingStore{saveWithOutboxErr: saveErr}
+		svc := NewEmbeddingService(store, &fakeEmbedder{vec: []float32{1}})
+
+		err := svc.Handle(context.Background(), dto.EventTypeQAPairCreated, validPayload)
+		if !errors.Is(err, saveErr) {
+			t.Fatalf("error = %v, want %v", err, saveErr)
+		}
+		if errors.Is(err, repository.ErrAlreadyProcessed) {
+			t.Fatal("must not treat generic save error as already processed")
 		}
 	})
 }

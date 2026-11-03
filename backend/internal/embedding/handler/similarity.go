@@ -7,6 +7,7 @@ import (
 
 	"github.com/ch4rniauski/support-brain/internal/embedding/dto"
 	"github.com/ch4rniauski/support-brain/internal/embedding/service"
+	"github.com/ch4rniauski/support-brain/pkg/httpx"
 )
 
 type SimilarityHandler struct {
@@ -20,7 +21,7 @@ func NewSimilarityHandler(svc *service.EmbeddingService) *SimilarityHandler {
 func (h *SimilarityHandler) FindSimilar(w http.ResponseWriter, r *http.Request) {
 	var req dto.FindSimilarRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body")
+		httpx.Error(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
@@ -28,24 +29,14 @@ func (h *SimilarityHandler) FindSimilar(w http.ResponseWriter, r *http.Request) 
 	if err != nil {
 		switch {
 		case errors.Is(err, service.ErrInvalidInput):
-			writeError(w, http.StatusBadRequest, err.Error())
+			httpx.Error(w, http.StatusBadRequest, err.Error())
 		case errors.Is(err, service.ErrEmbeddingNotFound):
-			writeError(w, http.StatusNotFound, err.Error())
+			httpx.Error(w, http.StatusNotFound, err.Error())
 		default:
-			writeError(w, http.StatusInternalServerError, "internal server error")
+			httpx.Error(w, http.StatusInternalServerError, "internal server error")
 		}
 		return
 	}
 
-	writeJSON(w, http.StatusOK, resp)
-}
-
-func writeJSON(w http.ResponseWriter, status int, payload any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(payload)
-}
-
-func writeError(w http.ResponseWriter, status int, message string) {
-	writeJSON(w, status, map[string]string{"error": message})
+	httpx.JSON(w, http.StatusOK, resp)
 }

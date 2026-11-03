@@ -8,6 +8,7 @@ import (
 
 	"github.com/ch4rniauski/support-brain/internal/intake/dto"
 	"github.com/ch4rniauski/support-brain/internal/intake/service"
+	"github.com/ch4rniauski/support-brain/pkg/httpx"
 	"github.com/google/uuid"
 )
 
@@ -22,7 +23,7 @@ func NewMessageHandler(svc *service.MessageService) *MessageHandler {
 func (h *MessageHandler) ListQAPairs(w http.ResponseWriter, r *http.Request) {
 	rawIDs := strings.TrimSpace(r.URL.Query().Get("ids"))
 	if rawIDs == "" {
-		writeError(w, http.StatusBadRequest, "ids query parameter is required")
+		httpx.Error(w, http.StatusBadRequest, "ids query parameter is required")
 		return
 	}
 
@@ -35,7 +36,7 @@ func (h *MessageHandler) ListQAPairs(w http.ResponseWriter, r *http.Request) {
 		}
 		id, err := uuid.Parse(part)
 		if err != nil {
-			writeError(w, http.StatusBadRequest, "invalid qa pair id")
+			httpx.Error(w, http.StatusBadRequest, "invalid qa pair id")
 			return
 		}
 		ids = append(ids, id)
@@ -47,13 +48,13 @@ func (h *MessageHandler) ListQAPairs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, resp)
+	httpx.JSON(w, http.StatusOK, resp)
 }
 
 func (h *MessageHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
 	var req dto.SendMessageRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body")
+		httpx.Error(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
@@ -63,13 +64,13 @@ func (h *MessageHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusCreated, resp)
+	httpx.JSON(w, http.StatusCreated, resp)
 }
 
 func (h *MessageHandler) ReplyMessage(w http.ResponseWriter, r *http.Request) {
 	var req dto.ReplyMessageRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body")
+		httpx.Error(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
@@ -79,28 +80,18 @@ func (h *MessageHandler) ReplyMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusCreated, resp)
+	httpx.JSON(w, http.StatusCreated, resp)
 }
 
 func writeMessageError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, service.ErrInvalidInput):
-		writeError(w, http.StatusBadRequest, err.Error())
+		httpx.Error(w, http.StatusBadRequest, err.Error())
 	case errors.Is(err, service.ErrConversationNotFound):
-		writeError(w, http.StatusNotFound, err.Error())
+		httpx.Error(w, http.StatusNotFound, err.Error())
 	case errors.Is(err, service.ErrConversationClosed):
-		writeError(w, http.StatusConflict, err.Error())
+		httpx.Error(w, http.StatusConflict, err.Error())
 	default:
-		writeError(w, http.StatusInternalServerError, "internal server error")
+		httpx.Error(w, http.StatusInternalServerError, "internal server error")
 	}
-}
-
-func writeJSON(w http.ResponseWriter, status int, payload any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(payload)
-}
-
-func writeError(w http.ResponseWriter, status int, message string) {
-	writeJSON(w, status, map[string]string{"error": message})
 }

@@ -24,5 +24,4 @@ type Template struct {
 	GenerationJobID *uuid.UUID     `db:"generation_job_id"`
 	UsedCount       int            `db:"used_count"`
 	ApprovedAt      *time.Time     `db:"approved_at"`
-	ApprovedBy      *string        `db:"approved_by"`
 }

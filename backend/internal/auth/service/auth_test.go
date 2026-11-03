@@ -194,3 +194,171 @@ func TestAuthService_Register(t *testing.T) {
 		}
 	})
 }
+
+func mustHashPassword(t *testing.T, password string) string {
+	t.Helper()
+
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.MinCost)
+	if err != nil {
+		t.Fatalf("hash password: %v", err)
+	}
+	return string(hash)
+}
+
+func TestAuthService_Login(t *testing.T) {
+	t.Parallel()
+
+	const password = "password123"
+	validReq := dto.LoginRequest{
+		Login:    "alice",
+		Password: password,
+	}
+
+	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+
+		users := &fakeUserStore{
+			getByLogin: &domain.User{
+				Login:        validReq.Login,
+				PasswordHash: mustHashPassword(t, password),
+				Role:         auth.RoleOperator,
+			},
+		}
+		tokens := &fakeTokenIssuer{token: "jwt-token"}
+		svc := NewAuthService(users, tokens)
+
+		resp, err := svc.Login(context.Background(), validReq)
+		if err != nil {
+			t.Fatalf("Login() error = %v", err)
+		}
+		if resp.Token != "jwt-token" {
+			t.Errorf("Token = %q, want %q", resp.Token, "jwt-token")
+		}
+		if resp.Role != string(auth.RoleOperator) {
+			t.Errorf("Role = %q, want %q", resp.Role, auth.RoleOperator)
+		}
+		if tokens.role != auth.RoleOperator {
+			t.Errorf("issued role = %q, want %q", tokens.role, auth.RoleOperator)
+		}
+	})
+
+	t.Run("invalid input", func(t *testing.T) {
+		t.Parallel()
+
+		tests := []struct {
+			name string
+			req  dto.LoginRequest
+		}{
+			{
+				name: "empty login",
+				req:  dto.LoginRequest{Login: "", Password: password},
+			},
+			{
+				name: "empty password",
+				req:  dto.LoginRequest{Login: "alice", Password: ""},
+			},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				t.Parallel()
+
+				svc := NewAuthService(&fakeUserStore{}, &fakeTokenIssuer{token: "jwt-token"})
+
+				resp, err := svc.Login(context.Background(), tt.req)
+				if !errors.Is(err, ErrInvalidInput) {
+					t.Fatalf("error = %v, want %v", err, ErrInvalidInput)
+				}
+				if resp != nil {
+					t.Errorf("response = %#v, want nil", resp)
+				}
+			})
+		}
+	})
+
+	t.Run("user not found", func(t *testing.T) {
+		t.Parallel()
+
+		users := &fakeUserStore{getByLoginErr: repository.ErrNotFound}
+		svc := NewAuthService(users, &fakeTokenIssuer{token: "jwt-token"})
+
+		resp, err := svc.Login(context.Background(), validReq)
+		if !errors.Is(err, ErrInvalidCredentials) {
+			t.Fatalf("error = %v, want %v", err, ErrInvalidCredentials)
+		}
+		if resp != nil {
+			t.Errorf("response = %#v, want nil", resp)
+		}
+	})
+
+	t.Run("wrong password", func(t *testing.T) {
+		t.Parallel()
+
+		users := &fakeUserStore{
+			getByLogin: &domain.User{
+				Login:        validReq.Login,
+				PasswordHash: mustHashPassword(t, password),
+				Role:         auth.RoleClient,
+			},
+		}
+		svc := NewAuthService(users, &fakeTokenIssuer{token: "jwt-token"})
+
+		resp, err := svc.Login(context.Background(), dto.LoginRequest{
+			Login:    validReq.Login,
+			Password: "wrong-password",
+		})
+		if !errors.Is(err, ErrInvalidCredentials) {
+			t.Fatalf("error = %v, want %v", err, ErrInvalidCredentials)
+		}
+		if resp != nil {
+			t.Errorf("response = %#v, want nil", resp)
+		}
+	})
+
+	t.Run("get user fails", func(t *testing.T) {
+		t.Parallel()
+
+		storeErr := errors.New("db down")
+		users := &fakeUserStore{getByLoginErr: storeErr}
+		svc := NewAuthService(users, &fakeTokenIssuer{token: "jwt-token"})
+
+		resp, err := svc.Login(context.Background(), validReq)
+		if err == nil {
+			t.Fatal("expected error")
+		}
+		if !errors.Is(err, storeErr) {
+			t.Fatalf("error = %v, want wrapped %v", err, storeErr)
+		}
+		if errors.Is(err, ErrInvalidCredentials) {
+			t.Fatal("must not map generic store error to ErrInvalidCredentials")
+		}
+		if resp != nil {
+			t.Errorf("response = %#v, want nil", resp)
+		}
+	})
+
+	t.Run("issue token fails", func(t *testing.T) {
+		t.Parallel()
+
+		issueErr := errors.New("signer failed")
+		users := &fakeUserStore{
+			getByLogin: &domain.User{
+				Login:        validReq.Login,
+				PasswordHash: mustHashPassword(t, password),
+				Role:         auth.RoleClient,
+			},
+		}
+		svc := NewAuthService(users, &fakeTokenIssuer{err: issueErr})
+
+		resp, err := svc.Login(context.Background(), validReq)
+		if err == nil {
+			t.Fatal("expected error")
+		}
+		if !errors.Is(err, issueErr) {
+			t.Fatalf("error = %v, want wrapped %v", err, issueErr)
+		}
+		if resp != nil {
+			t.Errorf("response = %#v, want nil", resp)
+		}
+	})
+}

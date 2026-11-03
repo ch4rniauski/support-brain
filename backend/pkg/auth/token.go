@@ -32,7 +32,7 @@ func (m *TokenManager) Issue(role Role) (string, error) {
 
 	now := time.Now().UTC()
 	claims := Claims{
-		Role: role,
+		Role:      role,
 		ExpiresAt: jwt.NewNumericDate(now.Add(m.ttl)),
 	}
 

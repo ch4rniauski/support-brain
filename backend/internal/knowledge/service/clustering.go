@@ -62,7 +62,7 @@ type ClusteringService struct {
 }
 
 func NewClusteringService(
-	store *repository.ClusterRepository,
+	store clusterStore,
 	client similarityClient,
 	cfg ClusteringConfig,
 ) *ClusteringService {

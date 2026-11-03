@@ -11,7 +11,6 @@ import (
 
 	"github.com/ch4rniauski/support-brain/internal/generator/domain"
 	"github.com/ch4rniauski/support-brain/internal/generator/dto"
-	"github.com/ch4rniauski/support-brain/internal/generator/repository"
 	"github.com/ch4rniauski/support-brain/pkg/kafka"
 	"github.com/ch4rniauski/support-brain/pkg/outbox"
 	"github.com/google/uuid"
@@ -64,7 +63,7 @@ type GeneratorService struct {
 }
 
 func NewGeneratorService(
-	jobs *repository.JobRepository,
+	jobs jobStore,
 	intake intakeClient,
 	llm llmClient,
 	cfg GeneratorConfig,

@@ -36,8 +36,8 @@ type AuthService struct {
 }
 
 func NewAuthService(
-	users *repository.UserRepository,
-	tokens *auth.TokenManager,
+	users userStore,
+	tokens tokenIssuer,
 ) *AuthService {
 	return &AuthService{
 		users:    users,

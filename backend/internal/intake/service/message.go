@@ -48,9 +48,9 @@ type MessageService struct {
 }
 
 func NewMessageService(
-	conversations *repository.ConversationRepository,
-	messages *repository.MessageRepository,
-	qaPairs *repository.QAPairRepository,
+	conversations conversationStore,
+	messages messageStore,
+	qaPairs qaPairStore,
 ) *MessageService {
 	return &MessageService{
 		conversations: conversations,

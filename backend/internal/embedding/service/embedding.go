@@ -54,7 +54,7 @@ type EmbeddingService struct {
 	validate *validator.Validate
 }
 
-func NewEmbeddingService(store *repository.EmbeddingRepository, embedder embedder) *EmbeddingService {
+func NewEmbeddingService(store embeddingStore, embedder embedder) *EmbeddingService {
 	return &EmbeddingService{
 		store:    store,
 		embedder: embedder,

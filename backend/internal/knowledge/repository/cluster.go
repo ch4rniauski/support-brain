@@ -128,6 +128,45 @@ func (r *ClusterRepository) GetClusterByID(ctx context.Context, id uuid.UUID) (*
 	return &cluster, nil
 }
 
+func (r *ClusterRepository) FindApprovedTemplateIDsByQAPairIDs(
+	ctx context.Context,
+	qaPairIDs []uuid.UUID,
+) (map[uuid.UUID]uuid.UUID, error) {
+	result := make(map[uuid.UUID]uuid.UUID, len(qaPairIDs))
+	if len(qaPairIDs) == 0 {
+		return result, nil
+	}
+
+	const query = `
+		SELECT cm.qa_pair_id, c.active_template_id
+		FROM cluster_members cm
+		INNER JOIN clusters c ON c.id = cm.cluster_id
+		WHERE cm.qa_pair_id = ANY($1)
+		  AND c.status = $2
+		  AND c.active_template_id IS NOT NULL
+	`
+
+	rows, err := r.pool.Query(ctx, query, qaPairIDs, domain.ClusterStatusHasApproved)
+	if err != nil {
+		return nil, fmt.Errorf("find approved template ids by qa pair ids: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var qaPairID uuid.UUID
+		var templateID uuid.UUID
+		if err := rows.Scan(&qaPairID, &templateID); err != nil {
+			return nil, fmt.Errorf("scan approved template id by qa pair id: %w", err)
+		}
+		result[qaPairID] = templateID
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate approved template ids by qa pair ids: %w", err)
+	}
+
+	return result, nil
+}
+
 func (r *ClusterRepository) ListMemberQAPairIDs(ctx context.Context, clusterID uuid.UUID) ([]uuid.UUID, error) {
 	const query = `
 		SELECT qa_pair_id

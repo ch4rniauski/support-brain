@@ -43,7 +43,7 @@ func (h *TemplateHandler) ListTemplates(w http.ResponseWriter, r *http.Request) 
 	httpx.JSON(w, http.StatusOK, resp)
 }
 
-func (h *TemplateHandler) GetTemplate(w http.ResponseWriter, r *http.Request) {
+func (h *TemplateHandler) GetTemplateByID(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
 		httpx.Error(w, http.StatusBadRequest, "invalid template id")

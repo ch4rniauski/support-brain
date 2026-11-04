@@ -12,6 +12,7 @@ import (
 	"github.com/ch4rniauski/support-brain/internal/knowledge/api"
 	"github.com/ch4rniauski/support-brain/internal/knowledge/client"
 	"github.com/ch4rniauski/support-brain/internal/knowledge/config"
+	"github.com/ch4rniauski/support-brain/internal/knowledge/handler"
 	"github.com/ch4rniauski/support-brain/internal/knowledge/repository"
 	"github.com/ch4rniauski/support-brain/internal/knowledge/service"
 	"github.com/ch4rniauski/support-brain/pkg/kafka"
@@ -50,6 +51,8 @@ func main() {
 			GenerationThresholdN: cfg.Clustering.GenerationThresholdN,
 		},
 	)
+	clusterService := service.NewClusterService(clusterRepo)
+	clusterHandler := handler.NewClusterHandler(clusterService)
 
 	producer := kafka.NewProducer(cfg.Kafka.Brokers)
 	defer func() {
@@ -88,7 +91,7 @@ func main() {
 
 	server := &http.Server{
 		Addr:              fmt.Sprintf(":%s", cfg.HTTP.Port),
-		Handler:           api.NewRouter(),
+		Handler:           api.NewRouter(clusterHandler),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 

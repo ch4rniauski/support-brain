@@ -175,6 +175,49 @@ func (r *TemplateRepository) UpdateDraftBody(
 	return &template, nil
 }
 
+func (r *TemplateRepository) Reject(ctx context.Context, id uuid.UUID) (*domain.Template, error) {
+	const query = `
+		UPDATE templates
+		SET status = $2
+		WHERE id = $1 AND status = $3
+		RETURNING
+			id,
+			cluster_id,
+			status,
+			version,
+			body,
+			generation_job_id,
+			used_count,
+			approved_at
+	`
+
+	var template domain.Template
+	err := r.pool.QueryRow(
+		ctx,
+		query,
+		id,
+		domain.TemplateStatusRejected,
+		domain.TemplateStatusDraft,
+	).Scan(
+		&template.ID,
+		&template.ClusterID,
+		&template.Status,
+		&template.Version,
+		&template.Body,
+		&template.GenerationJobID,
+		&template.UsedCount,
+		&template.ApprovedAt,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("reject template: %w", err)
+	}
+
+	return &template, nil
+}
+
 func (r *TemplateRepository) Approve(
 	ctx context.Context,
 	id uuid.UUID,

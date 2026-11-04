@@ -33,6 +33,7 @@ type templateStore interface {
 	GetByID(ctx context.Context, id uuid.UUID) (*domain.Template, error)
 	UpdateDraftBody(ctx context.Context, id uuid.UUID, body string) (*domain.Template, error)
 	Approve(ctx context.Context, id uuid.UUID, approvedAt time.Time) (*domain.Template, error)
+	Reject(ctx context.Context, id uuid.UUID) (*domain.Template, error)
 	ListByStatus(ctx context.Context, status domain.TemplateStatus) ([]domain.Template, error)
 }
 
@@ -105,6 +106,31 @@ func (s *TemplateService) Approve(ctx context.Context, id uuid.UUID) (*dto.Templ
 	}
 
 	item := toTemplateItem(*approved)
+	return &item, nil
+}
+
+func (s *TemplateService) Reject(ctx context.Context, id uuid.UUID) (*dto.TemplateItem, error) {
+	template, err := s.store.GetByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return nil, ErrTemplateNotFound
+		}
+		return nil, err
+	}
+
+	if template.Status != domain.TemplateStatusDraft {
+		return nil, ErrNotDraft
+	}
+
+	rejected, err := s.store.Reject(ctx, id)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return nil, ErrNotDraft
+		}
+		return nil, err
+	}
+
+	item := toTemplateItem(*rejected)
 	return &item, nil
 }
 

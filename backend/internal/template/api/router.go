@@ -22,6 +22,7 @@ func NewRouter(templateHandler *handler.TemplateHandler, authMiddleware *auth.Mi
 		r.Get("/templates/{id}", templateHandler.GetTemplate)
 		r.Patch("/templates/{id}", templateHandler.UpdateTemplate)
 		r.Post("/templates/{id}/approve", templateHandler.ApproveTemplate)
+		r.Post("/templates/{id}/reject", templateHandler.RejectTemplate)
 	})
 
 	return r

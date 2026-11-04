@@ -117,3 +117,26 @@ func (h *TemplateHandler) ApproveTemplate(w http.ResponseWriter, r *http.Request
 
 	httpx.JSON(w, http.StatusOK, resp)
 }
+
+func (h *TemplateHandler) RejectTemplate(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		httpx.Error(w, http.StatusBadRequest, "invalid template id")
+		return
+	}
+
+	resp, err := h.service.Reject(r.Context(), id)
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrTemplateNotFound):
+			httpx.Error(w, http.StatusNotFound, err.Error())
+		case errors.Is(err, service.ErrNotDraft):
+			httpx.Error(w, http.StatusConflict, err.Error())
+		default:
+			httpx.Error(w, http.StatusInternalServerError, "internal server error")
+		}
+		return
+	}
+
+	httpx.JSON(w, http.StatusOK, resp)
+}

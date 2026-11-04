@@ -12,7 +12,10 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-var ErrAlreadyImported = errors.New("template draft already imported")
+var (
+	ErrAlreadyImported = errors.New("template draft already imported")
+	ErrNotFound        = errors.New("not found")
+)
 
 type TemplateRepository struct {
 	pool *pgxpool.Pool
@@ -89,6 +92,42 @@ func (r *TemplateRepository) CreateDraft(ctx context.Context, template *domain.T
 	}
 
 	return nil
+}
+
+func (r *TemplateRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Template, error) {
+	const query = `
+		SELECT
+			id,
+			cluster_id,
+			status,
+			version,
+			body,
+			generation_job_id,
+			used_count,
+			approved_at
+		FROM templates
+		WHERE id = $1
+	`
+
+	var template domain.Template
+	err := r.pool.QueryRow(ctx, query, id).Scan(
+		&template.ID,
+		&template.ClusterID,
+		&template.Status,
+		&template.Version,
+		&template.Body,
+		&template.GenerationJobID,
+		&template.UsedCount,
+		&template.ApprovedAt,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("get template: %w", err)
+	}
+
+	return &template, nil
 }
 
 func (r *TemplateRepository) ListByStatus(

@@ -19,11 +19,15 @@ func permanent(err error) error {
 	return fmt.Errorf("%w: %w", kafka.ErrPermanent, err)
 }
 
-var ErrInvalidStatus = errors.New("invalid template status")
+var (
+	ErrInvalidStatus    = errors.New("invalid template status")
+	ErrTemplateNotFound = errors.New("template not found")
+)
 
 type templateStore interface {
 	ExistsByGenerationJobID(ctx context.Context, generationJobID uuid.UUID) (bool, error)
 	CreateDraft(ctx context.Context, template *domain.Template) error
+	GetByID(ctx context.Context, id uuid.UUID) (*domain.Template, error)
 	ListByStatus(ctx context.Context, status domain.TemplateStatus) ([]domain.Template, error)
 }
 
@@ -33,6 +37,19 @@ type TemplateService struct {
 
 func NewTemplateService(store templateStore) *TemplateService {
 	return &TemplateService{store: store}
+}
+
+func (s *TemplateService) GetByID(ctx context.Context, id uuid.UUID) (*dto.TemplateItem, error) {
+	template, err := s.store.GetByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return nil, ErrTemplateNotFound
+		}
+		return nil, err
+	}
+
+	item := toTemplateItem(*template)
+	return &item, nil
 }
 
 func (s *TemplateService) ListByStatus(
@@ -50,19 +67,23 @@ func (s *TemplateService) ListByStatus(
 
 	items := make([]dto.TemplateItem, 0, len(templates))
 	for _, template := range templates {
-		items = append(items, dto.TemplateItem{
-			ID:              template.ID,
-			ClusterID:       template.ClusterID,
-			Status:          string(template.Status),
-			Version:         template.Version,
-			Body:            template.Body,
-			GenerationJobID: template.GenerationJobID,
-			UsedCount:       template.UsedCount,
-			ApprovedAt:      template.ApprovedAt,
-		})
+		items = append(items, toTemplateItem(template))
 	}
 
 	return &dto.ListTemplatesResponse{Items: items}, nil
+}
+
+func toTemplateItem(template domain.Template) dto.TemplateItem {
+	return dto.TemplateItem{
+		ID:              template.ID,
+		ClusterID:       template.ClusterID,
+		Status:          string(template.Status),
+		Version:         template.Version,
+		Body:            template.Body,
+		GenerationJobID: template.GenerationJobID,
+		UsedCount:       template.UsedCount,
+		ApprovedAt:      template.ApprovedAt,
+	}
 }
 
 func isValidStatus(status domain.TemplateStatus) bool {

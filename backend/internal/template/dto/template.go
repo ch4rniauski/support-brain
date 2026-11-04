@@ -20,3 +20,7 @@ type TemplateItem struct {
 type ListTemplatesResponse struct {
 	Items []TemplateItem `json:"items"`
 }
+
+type UpdateTemplateRequest struct {
+	Body string `json:"body"`
+}

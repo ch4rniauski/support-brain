@@ -20,6 +20,7 @@ func NewRouter(templateHandler *handler.TemplateHandler, authMiddleware *auth.Mi
 		r.Use(authMiddleware.RequireRoles(auth.RoleOperator))
 		r.Get("/templates", templateHandler.ListTemplates)
 		r.Get("/templates/{id}", templateHandler.GetTemplate)
+		r.Patch("/templates/{id}", templateHandler.UpdateTemplate)
 	})
 
 	return r

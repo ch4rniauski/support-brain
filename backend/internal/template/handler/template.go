@@ -1,11 +1,13 @@
 package handler
 
 import (
+	"encoding/json"
 	"errors"
 	"net/http"
 	"strings"
 
 	"github.com/ch4rniauski/support-brain/internal/template/domain"
+	"github.com/ch4rniauski/support-brain/internal/template/dto"
 	"github.com/ch4rniauski/support-brain/internal/template/service"
 	"github.com/ch4rniauski/support-brain/pkg/httpx"
 	"github.com/go-chi/chi/v5"
@@ -53,6 +55,37 @@ func (h *TemplateHandler) GetTemplate(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case errors.Is(err, service.ErrTemplateNotFound):
 			httpx.Error(w, http.StatusNotFound, err.Error())
+		default:
+			httpx.Error(w, http.StatusInternalServerError, "internal server error")
+		}
+		return
+	}
+
+	httpx.JSON(w, http.StatusOK, resp)
+}
+
+func (h *TemplateHandler) UpdateTemplate(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		httpx.Error(w, http.StatusBadRequest, "invalid template id")
+		return
+	}
+
+	var req dto.UpdateTemplateRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		httpx.Error(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	resp, err := h.service.UpdateDraft(r.Context(), id, req)
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrInvalidInput):
+			httpx.Error(w, http.StatusBadRequest, "body is required")
+		case errors.Is(err, service.ErrTemplateNotFound):
+			httpx.Error(w, http.StatusNotFound, err.Error())
+		case errors.Is(err, service.ErrNotDraft):
+			httpx.Error(w, http.StatusConflict, err.Error())
 		default:
 			httpx.Error(w, http.StatusInternalServerError, "internal server error")
 		}

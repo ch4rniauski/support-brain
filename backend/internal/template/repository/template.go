@@ -130,6 +130,49 @@ func (r *TemplateRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain
 	return &template, nil
 }
 
+func (r *TemplateRepository) UpdateDraftBody(
+	ctx context.Context,
+	id uuid.UUID,
+	body string,
+) (*domain.Template, error) {
+	const query = `
+		UPDATE templates
+		SET
+			body = $2,
+			version = version + 1
+		WHERE id = $1 AND status = $3
+		RETURNING
+			id,
+			cluster_id,
+			status,
+			version,
+			body,
+			generation_job_id,
+			used_count,
+			approved_at
+	`
+
+	var template domain.Template
+	err := r.pool.QueryRow(ctx, query, id, body, domain.TemplateStatusDraft).Scan(
+		&template.ID,
+		&template.ClusterID,
+		&template.Status,
+		&template.Version,
+		&template.Body,
+		&template.GenerationJobID,
+		&template.UsedCount,
+		&template.ApprovedAt,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("update draft template body: %w", err)
+	}
+
+	return &template, nil
+}
+
 func (r *TemplateRepository) ListByStatus(
 	ctx context.Context,
 	status domain.TemplateStatus,

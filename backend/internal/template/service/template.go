@@ -21,13 +21,16 @@ func permanent(err error) error {
 
 var (
 	ErrInvalidStatus    = errors.New("invalid template status")
+	ErrInvalidInput     = errors.New("invalid input")
 	ErrTemplateNotFound = errors.New("template not found")
+	ErrNotDraft         = errors.New("template is not in draft status")
 )
 
 type templateStore interface {
 	ExistsByGenerationJobID(ctx context.Context, generationJobID uuid.UUID) (bool, error)
 	CreateDraft(ctx context.Context, template *domain.Template) error
 	GetByID(ctx context.Context, id uuid.UUID) (*domain.Template, error)
+	UpdateDraftBody(ctx context.Context, id uuid.UUID, body string) (*domain.Template, error)
 	ListByStatus(ctx context.Context, status domain.TemplateStatus) ([]domain.Template, error)
 }
 
@@ -49,6 +52,40 @@ func (s *TemplateService) GetByID(ctx context.Context, id uuid.UUID) (*dto.Templ
 	}
 
 	item := toTemplateItem(*template)
+	return &item, nil
+}
+
+func (s *TemplateService) UpdateDraft(
+	ctx context.Context,
+	id uuid.UUID,
+	req dto.UpdateTemplateRequest,
+) (*dto.TemplateItem, error) {
+	body := strings.TrimSpace(req.Body)
+	if body == "" {
+		return nil, ErrInvalidInput
+	}
+
+	template, err := s.store.GetByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return nil, ErrTemplateNotFound
+		}
+		return nil, err
+	}
+
+	if template.Status != domain.TemplateStatusDraft {
+		return nil, ErrNotDraft
+	}
+
+	updated, err := s.store.UpdateDraftBody(ctx, id, body)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return nil, ErrNotDraft
+		}
+		return nil, err
+	}
+
+	item := toTemplateItem(*updated)
 	return &item, nil
 }
 

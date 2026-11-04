@@ -4,12 +4,10 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"strings"
 
 	"github.com/ch4rniauski/support-brain/internal/intake/dto"
 	"github.com/ch4rniauski/support-brain/internal/intake/service"
 	"github.com/ch4rniauski/support-brain/pkg/httpx"
-	"github.com/google/uuid"
 )
 
 type MessageHandler struct {
@@ -21,28 +19,13 @@ func NewMessageHandler(svc *service.MessageService) *MessageHandler {
 }
 
 func (h *MessageHandler) ListQAPairs(w http.ResponseWriter, r *http.Request) {
-	rawIDs := strings.TrimSpace(r.URL.Query().Get("ids"))
-	if rawIDs == "" {
-		httpx.Error(w, http.StatusBadRequest, "ids query parameter is required")
+	var req dto.ListQAPairsRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		httpx.Error(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
-	parts := strings.Split(rawIDs, ",")
-	ids := make([]uuid.UUID, 0, len(parts))
-	for _, part := range parts {
-		part = strings.TrimSpace(part)
-		if part == "" {
-			continue
-		}
-		id, err := uuid.Parse(part)
-		if err != nil {
-			httpx.Error(w, http.StatusBadRequest, "invalid qa pair id")
-			return
-		}
-		ids = append(ids, id)
-	}
-
-	resp, err := h.service.ListQAPairs(r.Context(), ids)
+	resp, err := h.service.ListQAPairs(r.Context(), req)
 	if err != nil {
 		writeMessageError(w, err)
 		return

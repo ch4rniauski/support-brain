@@ -1,12 +1,12 @@
 package client
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"strings"
 	"time"
 
@@ -35,19 +35,21 @@ func (c *IntakeClient) ListQAPairs(ctx context.Context, ids []uuid.UUID) (*dto.L
 		return &dto.ListQAPairsResponse{Items: []dto.IntakeQAPairItem{}}, nil
 	}
 
-	parts := make([]string, 0, len(ids))
-	for _, id := range ids {
-		parts = append(parts, id.String())
+	payload, err := json.Marshal(dto.ListQAPairsRequest{IDs: ids})
+	if err != nil {
+		return nil, fmt.Errorf("marshal list qa pairs request: %w", err)
 	}
 
-	q := url.Values{}
-	q.Set("ids", strings.Join(parts, ","))
-	endpoint := fmt.Sprintf("%s%s?%s", c.baseURL, qaPairsPath, q.Encode())
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	req, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodPost,
+		c.baseURL+qaPairsPath,
+		bytes.NewReader(payload),
+	)
 	if err != nil {
 		return nil, fmt.Errorf("create list qa pairs request: %w", err)
 	}
+	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {

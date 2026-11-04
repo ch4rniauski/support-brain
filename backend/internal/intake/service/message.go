@@ -91,12 +91,15 @@ func (s *MessageService) SendMessage(ctx context.Context, req dto.SendMessageReq
 	return s.appendToConversation(ctx, *req.ConversationID, msg)
 }
 
-func (s *MessageService) ListQAPairs(ctx context.Context, ids []uuid.UUID) (*dto.ListQAPairsResponse, error) {
-	if len(ids) == 0 {
-		return nil, fmt.Errorf("%w: ids are required", ErrInvalidInput)
+func (s *MessageService) ListQAPairs(
+	ctx context.Context,
+	req dto.ListQAPairsRequest,
+) (*dto.ListQAPairsResponse, error) {
+	if err := s.validate.Struct(req); err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrInvalidInput, err)
 	}
 
-	pairs, err := s.qaPairs.ListByIDs(ctx, ids)
+	pairs, err := s.qaPairs.ListByIDs(ctx, req.IDs)
 	if err != nil {
 		return nil, err
 	}

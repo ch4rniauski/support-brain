@@ -15,6 +15,7 @@ import (
 	"github.com/ch4rniauski/support-brain/internal/embedding/ollama"
 	"github.com/ch4rniauski/support-brain/internal/embedding/repository"
 	"github.com/ch4rniauski/support-brain/internal/embedding/service"
+	"github.com/ch4rniauski/support-brain/pkg/auth"
 	"github.com/ch4rniauski/support-brain/pkg/kafka"
 	"github.com/ch4rniauski/support-brain/pkg/outbox"
 	"github.com/ch4rniauski/support-brain/pkg/postgres"
@@ -38,6 +39,9 @@ func main() {
 		log.Fatalf("pool creation: %v", err)
 	}
 	defer pool.Close()
+
+	tokenManager := auth.NewTokenManager(cfg.Auth.JWTSecret, cfg.Auth.TokenTTL)
+	authMiddleware := auth.NewMiddleware(tokenManager)
 
 	embeddingRepo := repository.NewEmbeddingRepository(pool)
 	outboxRepo := repository.NewOutboxRepository(pool)
@@ -82,7 +86,7 @@ func main() {
 
 	server := &http.Server{
 		Addr:              fmt.Sprintf(":%s", cfg.HTTP.Port),
-		Handler:           api.NewRouter(similarityHandler),
+		Handler:           api.NewRouter(similarityHandler, authMiddleware),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 

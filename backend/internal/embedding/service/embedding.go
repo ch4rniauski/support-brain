@@ -45,6 +45,13 @@ type embeddingStore interface {
 		threshold float64,
 		limit int,
 	) ([]domain.SimilarQuestion, error)
+	FindSimilarByEmbedding(
+		ctx context.Context,
+		embedding []float32,
+		modelName string,
+		threshold float64,
+		limit int,
+	) ([]domain.SimilarQuestion, error)
 }
 
 type EmbeddingService struct {
@@ -77,6 +84,46 @@ func (s *EmbeddingService) FindSimilar(
 		return nil, err
 	}
 
+	return &dto.FindSimilarResponse{
+		QAPairID: req.QAPairID,
+		Results:  toSimilarResults(matches),
+	}, nil
+}
+
+func (s *EmbeddingService) FindSimilarByText(
+	ctx context.Context,
+	req dto.FindSimilarByTextRequest,
+) (*dto.FindSimilarByTextResponse, error) {
+	if req.Limit == 0 {
+		req.Limit = 10
+	}
+
+	if err := s.validate.Struct(req); err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrInvalidInput, err)
+	}
+
+	vector, err := s.embedder.Embed(ctx, req.Text)
+	if err != nil {
+		return nil, fmt.Errorf("embed text: %w", err)
+	}
+
+	matches, err := s.store.FindSimilarByEmbedding(
+		ctx,
+		vector,
+		s.embedder.Model(),
+		req.Threshold,
+		req.Limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return &dto.FindSimilarByTextResponse{
+		Results: toSimilarResults(matches),
+	}, nil
+}
+
+func toSimilarResults(matches []domain.SimilarQuestion) []dto.SimilarResult {
 	results := make([]dto.SimilarResult, 0, len(matches))
 	for _, match := range matches {
 		results = append(results, dto.SimilarResult{
@@ -84,11 +131,7 @@ func (s *EmbeddingService) FindSimilar(
 			Score:    match.Score,
 		})
 	}
-
-	return &dto.FindSimilarResponse{
-		QAPairID: req.QAPairID,
-		Results:  results,
-	}, nil
+	return results
 }
 
 func (s *EmbeddingService) Handle(ctx context.Context, eventType string, payload []byte) error {

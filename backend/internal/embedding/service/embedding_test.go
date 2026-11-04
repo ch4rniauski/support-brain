@@ -22,6 +22,14 @@ type fakeEmbeddingStore struct {
 	lastFindThreshold float64
 	lastFindLimit     int
 
+	findByEmbedding       []domain.SimilarQuestion
+	findByEmbeddingErr    error
+	lastFindByEmbedding   []float32
+	lastFindByModelName   string
+	lastFindByThreshold   float64
+	lastFindByLimit       int
+	findByEmbeddingCalled bool
+
 	exists              bool
 	existsErr           error
 	existsCalled        bool
@@ -70,6 +78,24 @@ func (f *fakeEmbeddingStore) FindSimilar(
 		return nil, f.findSimilarErr
 	}
 	return f.findSimilar, nil
+}
+
+func (f *fakeEmbeddingStore) FindSimilarByEmbedding(
+	ctx context.Context,
+	embedding []float32,
+	modelName string,
+	threshold float64,
+	limit int,
+) ([]domain.SimilarQuestion, error) {
+	f.findByEmbeddingCalled = true
+	f.lastFindByEmbedding = embedding
+	f.lastFindByModelName = modelName
+	f.lastFindByThreshold = threshold
+	f.lastFindByLimit = limit
+	if f.findByEmbeddingErr != nil {
+		return nil, f.findByEmbeddingErr
+	}
+	return f.findByEmbedding, nil
 }
 
 type fakeEmbedder struct {
@@ -259,6 +285,168 @@ func TestEmbeddingService_FindSimilar(t *testing.T) {
 		}
 		if errors.Is(err, ErrEmbeddingNotFound) {
 			t.Fatal("must not map generic store error to ErrEmbeddingNotFound")
+		}
+		if resp != nil {
+			t.Errorf("response = %#v, want nil", resp)
+		}
+	})
+}
+
+func TestEmbeddingService_FindSimilarByText(t *testing.T) {
+	t.Parallel()
+
+	matchID := uuid.MustParse("44444444-4444-4444-4444-444444444444")
+	validReq := dto.FindSimilarByTextRequest{
+		Text:      "How do I reset my password?",
+		Threshold: 0.8,
+		Limit:     5,
+	}
+
+	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+
+		store := &fakeEmbeddingStore{
+			findByEmbedding: []domain.SimilarQuestion{
+				{QAPairID: matchID, Score: 0.93},
+			},
+		}
+		embedder := &fakeEmbedder{
+			model: "nomic-embed-text",
+			vec:   []float32{0.1, 0.2, 0.3},
+		}
+		svc := NewEmbeddingService(store, embedder)
+
+		resp, err := svc.FindSimilarByText(context.Background(), validReq)
+		if err != nil {
+			t.Fatalf("FindSimilarByText() error = %v", err)
+		}
+		if len(resp.Results) != 1 {
+			t.Fatalf("Results len = %d, want 1", len(resp.Results))
+		}
+		if resp.Results[0].QAPairID != matchID {
+			t.Errorf("Results[0].QAPairID = %v, want %v", resp.Results[0].QAPairID, matchID)
+		}
+		if resp.Results[0].Score != 0.93 {
+			t.Errorf("Results[0].Score = %v, want 0.93", resp.Results[0].Score)
+		}
+		if embedder.embedCalls != 1 || embedder.lastText != validReq.Text {
+			t.Errorf("Embed calls = %d text = %q", embedder.embedCalls, embedder.lastText)
+		}
+		if !store.findByEmbeddingCalled {
+			t.Fatal("expected FindSimilarByEmbedding to be called")
+		}
+		if store.lastFindByModelName != "nomic-embed-text" {
+			t.Errorf("model = %q, want nomic-embed-text", store.lastFindByModelName)
+		}
+		if store.lastFindByThreshold != validReq.Threshold || store.lastFindByLimit != validReq.Limit {
+			t.Errorf("threshold/limit = %v/%d", store.lastFindByThreshold, store.lastFindByLimit)
+		}
+		if store.saveCalled {
+			t.Fatal("must not persist query embedding")
+		}
+	})
+
+	t.Run("defaults limit to 10", func(t *testing.T) {
+		t.Parallel()
+
+		store := &fakeEmbeddingStore{}
+		svc := NewEmbeddingService(store, &fakeEmbedder{model: "m", vec: []float32{1}})
+
+		_, err := svc.FindSimilarByText(context.Background(), dto.FindSimilarByTextRequest{
+			Text:      "question",
+			Threshold: 0.5,
+		})
+		if err != nil {
+			t.Fatalf("FindSimilarByText() error = %v", err)
+		}
+		if store.lastFindByLimit != 10 {
+			t.Errorf("limit = %d, want 10", store.lastFindByLimit)
+		}
+	})
+
+	t.Run("invalid input", func(t *testing.T) {
+		t.Parallel()
+
+		tests := []struct {
+			name string
+			req  dto.FindSimilarByTextRequest
+		}{
+			{
+				name: "missing text",
+				req: dto.FindSimilarByTextRequest{
+					Threshold: 0.8,
+					Limit:     5,
+				},
+			},
+			{
+				name: "threshold too high",
+				req: dto.FindSimilarByTextRequest{
+					Text:      "question",
+					Threshold: 1.1,
+					Limit:     5,
+				},
+			},
+			{
+				name: "limit too high",
+				req: dto.FindSimilarByTextRequest{
+					Text:      "question",
+					Threshold: 0.8,
+					Limit:     101,
+				},
+			},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				t.Parallel()
+
+				store := &fakeEmbeddingStore{}
+				embedder := &fakeEmbedder{}
+				svc := NewEmbeddingService(store, embedder)
+
+				resp, err := svc.FindSimilarByText(context.Background(), tt.req)
+				if !errors.Is(err, ErrInvalidInput) {
+					t.Fatalf("error = %v, want %v", err, ErrInvalidInput)
+				}
+				if resp != nil {
+					t.Errorf("response = %#v, want nil", resp)
+				}
+				if embedder.embedCalls != 0 || store.findByEmbeddingCalled {
+					t.Fatal("must not embed or search on invalid input")
+				}
+			})
+		}
+	})
+
+	t.Run("embed fails", func(t *testing.T) {
+		t.Parallel()
+
+		embedErr := errors.New("ollama down")
+		store := &fakeEmbeddingStore{}
+		svc := NewEmbeddingService(store, &fakeEmbedder{err: embedErr})
+
+		resp, err := svc.FindSimilarByText(context.Background(), validReq)
+		if !errors.Is(err, embedErr) {
+			t.Fatalf("error = %v, want %v", err, embedErr)
+		}
+		if resp != nil {
+			t.Errorf("response = %#v, want nil", resp)
+		}
+		if store.findByEmbeddingCalled {
+			t.Fatal("must not search when embed fails")
+		}
+	})
+
+	t.Run("store fails", func(t *testing.T) {
+		t.Parallel()
+
+		storeErr := errors.New("db down")
+		store := &fakeEmbeddingStore{findByEmbeddingErr: storeErr}
+		svc := NewEmbeddingService(store, &fakeEmbedder{vec: []float32{1}})
+
+		resp, err := svc.FindSimilarByText(context.Background(), validReq)
+		if !errors.Is(err, storeErr) {
+			t.Fatalf("error = %v, want %v", err, storeErr)
 		}
 		if resp != nil {
 			t.Errorf("response = %#v, want nil", resp)

@@ -40,3 +40,24 @@ func (h *SimilarityHandler) FindSimilar(w http.ResponseWriter, r *http.Request) 
 
 	httpx.JSON(w, http.StatusOK, resp)
 }
+
+func (h *SimilarityHandler) FindSimilarByText(w http.ResponseWriter, r *http.Request) {
+	var req dto.FindSimilarByTextRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		httpx.Error(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	resp, err := h.service.FindSimilarByText(r.Context(), req)
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrInvalidInput):
+			httpx.Error(w, http.StatusBadRequest, err.Error())
+		default:
+			httpx.Error(w, http.StatusInternalServerError, "internal server error")
+		}
+		return
+	}
+
+	httpx.JSON(w, http.StatusOK, resp)
+}

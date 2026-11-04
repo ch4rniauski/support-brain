@@ -95,6 +95,37 @@ func (r *EmbeddingRepository) FindSimilar(
 	}
 	defer rows.Close()
 
+	return scanSimilarQuestions(rows, limit)
+}
+
+func (r *EmbeddingRepository) FindSimilarByEmbedding(
+	ctx context.Context,
+	embedding []float32,
+	modelName string,
+	threshold float64,
+	limit int,
+) ([]domain.SimilarQuestion, error) {
+	const query = `
+		SELECT
+			qe.qa_pair_id,
+			1 - (qe.embedding <=> $1::vector) AS score
+		FROM question_embeddings qe
+		WHERE qe.model_name = $2
+		  AND 1 - (qe.embedding <=> $1::vector) >= $3
+		ORDER BY qe.embedding <=> $1::vector
+		LIMIT $4
+	`
+
+	rows, err := r.pool.Query(ctx, query, vectorLiteral(embedding), modelName, threshold, limit)
+	if err != nil {
+		return nil, fmt.Errorf("find similar embeddings by vector: %w", err)
+	}
+	defer rows.Close()
+
+	return scanSimilarQuestions(rows, limit)
+}
+
+func scanSimilarQuestions(rows pgx.Rows, limit int) ([]domain.SimilarQuestion, error) {
 	results := make([]domain.SimilarQuestion, 0, limit)
 	for rows.Next() {
 		var item domain.SimilarQuestion

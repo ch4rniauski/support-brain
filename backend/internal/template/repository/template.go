@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/ch4rniauski/support-brain/internal/template/domain"
 	"github.com/google/uuid"
@@ -15,6 +16,7 @@ import (
 var (
 	ErrAlreadyImported = errors.New("template draft already imported")
 	ErrNotFound        = errors.New("not found")
+	ErrNotDraft        = errors.New("not draft")
 )
 
 type TemplateRepository struct {
@@ -168,6 +170,115 @@ func (r *TemplateRepository) UpdateDraftBody(
 	}
 	if err != nil {
 		return nil, fmt.Errorf("update draft template body: %w", err)
+	}
+
+	return &template, nil
+}
+
+func (r *TemplateRepository) Approve(
+	ctx context.Context,
+	id uuid.UUID,
+	approvedAt time.Time,
+) (*domain.Template, error) {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	const selectQuery = `
+		SELECT
+			id,
+			cluster_id,
+			status,
+			version,
+			body,
+			generation_job_id,
+			used_count,
+			approved_at
+		FROM templates
+		WHERE id = $1
+		FOR UPDATE
+	`
+
+	var template domain.Template
+	err = tx.QueryRow(ctx, selectQuery, id).Scan(
+		&template.ID,
+		&template.ClusterID,
+		&template.Status,
+		&template.Version,
+		&template.Body,
+		&template.GenerationJobID,
+		&template.UsedCount,
+		&template.ApprovedAt,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("get template for approve: %w", err)
+	}
+
+	if template.Status != domain.TemplateStatusDraft {
+		return nil, ErrNotDraft
+	}
+
+	const archiveQuery = `
+		UPDATE templates
+		SET status = $1
+		WHERE cluster_id = $2
+			AND status = $3
+			AND id <> $4
+	`
+	if _, err := tx.Exec(
+		ctx,
+		archiveQuery,
+		domain.TemplateStatusArchived,
+		template.ClusterID,
+		domain.TemplateStatusApproved,
+		template.ID,
+	); err != nil {
+		return nil, fmt.Errorf("archive approved templates: %w", err)
+	}
+
+	const approveQuery = `
+		UPDATE templates
+		SET
+			status = $2,
+			approved_at = $3
+		WHERE id = $1
+		RETURNING
+			id,
+			cluster_id,
+			status,
+			version,
+			body,
+			generation_job_id,
+			used_count,
+			approved_at
+	`
+	err = tx.QueryRow(
+		ctx,
+		approveQuery,
+		template.ID,
+		domain.TemplateStatusApproved,
+		approvedAt,
+	).Scan(
+		&template.ID,
+		&template.ClusterID,
+		&template.Status,
+		&template.Version,
+		&template.Body,
+		&template.GenerationJobID,
+		&template.UsedCount,
+		&template.ApprovedAt,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("approve template: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("commit tx: %w", err)
 	}
 
 	return &template, nil

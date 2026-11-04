@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"time"
 
 	"github.com/ch4rniauski/support-brain/internal/template/domain"
 	"github.com/ch4rniauski/support-brain/internal/template/dto"
@@ -31,6 +32,7 @@ type templateStore interface {
 	CreateDraft(ctx context.Context, template *domain.Template) error
 	GetByID(ctx context.Context, id uuid.UUID) (*domain.Template, error)
 	UpdateDraftBody(ctx context.Context, id uuid.UUID, body string) (*domain.Template, error)
+	Approve(ctx context.Context, id uuid.UUID, approvedAt time.Time) (*domain.Template, error)
 	ListByStatus(ctx context.Context, status domain.TemplateStatus) ([]domain.Template, error)
 }
 
@@ -86,6 +88,23 @@ func (s *TemplateService) UpdateDraft(
 	}
 
 	item := toTemplateItem(*updated)
+	return &item, nil
+}
+
+func (s *TemplateService) Approve(ctx context.Context, id uuid.UUID) (*dto.TemplateItem, error) {
+	approved, err := s.store.Approve(ctx, id, time.Now().UTC())
+	if err != nil {
+		switch {
+		case errors.Is(err, repository.ErrNotFound):
+			return nil, ErrTemplateNotFound
+		case errors.Is(err, repository.ErrNotDraft):
+			return nil, ErrNotDraft
+		default:
+			return nil, err
+		}
+	}
+
+	item := toTemplateItem(*approved)
 	return &item, nil
 }
 

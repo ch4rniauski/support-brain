@@ -11,6 +11,8 @@ import (
 	"time"
 )
 
+const embedPath = "/api/embed"
+
 type Client struct {
 	baseURL    string
 	httpClient *http.Client
@@ -52,7 +54,7 @@ func (c *Client) Embed(ctx context.Context, text string) ([]float32, error) {
 	req, err := http.NewRequestWithContext(
 		ctx,
 		http.MethodPost,
-		c.baseURL+"/api/embed",
+		c.baseURL+embedPath,
 		bytes.NewReader(body),
 	)
 	if err != nil {

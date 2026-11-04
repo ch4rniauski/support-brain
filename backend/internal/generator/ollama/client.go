@@ -11,6 +11,8 @@ import (
 	"time"
 )
 
+const chatPath = "/api/chat"
+
 type Client struct {
 	baseURL    string
 	model      string
@@ -62,7 +64,7 @@ func (c *Client) GenerateReply(ctx context.Context, systemPrompt, userPrompt str
 	req, err := http.NewRequestWithContext(
 		ctx,
 		http.MethodPost,
-		c.baseURL+"/api/chat",
+		c.baseURL+chatPath,
 		bytes.NewReader(body),
 	)
 	if err != nil {

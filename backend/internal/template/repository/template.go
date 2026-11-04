@@ -352,6 +352,42 @@ func (r *TemplateRepository) ListByStatus(
 	}
 	defer rows.Close()
 
+	return scanTemplates(rows)
+}
+
+func (r *TemplateRepository) FindApprovedByIDs(
+	ctx context.Context,
+	ids []uuid.UUID,
+) ([]domain.Template, error) {
+	if len(ids) == 0 {
+		return []domain.Template{}, nil
+	}
+
+	const query = `
+		SELECT
+			id,
+			cluster_id,
+			status,
+			version,
+			body,
+			generation_job_id,
+			used_count,
+			approved_at
+		FROM templates
+		WHERE id = ANY($1)
+		  AND status = $2
+	`
+
+	rows, err := r.pool.Query(ctx, query, ids, domain.TemplateStatusApproved)
+	if err != nil {
+		return nil, fmt.Errorf("find approved templates by ids: %w", err)
+	}
+	defer rows.Close()
+
+	return scanTemplates(rows)
+}
+
+func scanTemplates(rows pgx.Rows) ([]domain.Template, error) {
 	templates := make([]domain.Template, 0)
 	for rows.Next() {
 		var template domain.Template

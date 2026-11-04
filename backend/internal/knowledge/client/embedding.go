@@ -13,6 +13,8 @@ import (
 	"github.com/google/uuid"
 )
 
+const similarPath = "/similar"
+
 type EmbeddingClient struct {
 	baseURL    string
 	modelName  string
@@ -50,7 +52,7 @@ func (c *EmbeddingClient) FindSimilar(
 	req, err := http.NewRequestWithContext(
 		ctx,
 		http.MethodPost,
-		c.baseURL+"/similar",
+		c.baseURL+similarPath,
 		bytes.NewReader(payload),
 	)
 	if err != nil {

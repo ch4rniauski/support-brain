@@ -140,3 +140,24 @@ func (h *TemplateHandler) RejectTemplate(w http.ResponseWriter, r *http.Request)
 
 	httpx.JSON(w, http.StatusOK, resp)
 }
+
+func (h *TemplateHandler) SuggestTemplates(w http.ResponseWriter, r *http.Request) {
+	var req dto.SuggestTemplatesRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		httpx.Error(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	resp, err := h.service.Suggest(r.Context(), req)
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrInvalidInput):
+			httpx.Error(w, http.StatusBadRequest, err.Error())
+		default:
+			httpx.Error(w, http.StatusInternalServerError, "internal server error")
+		}
+		return
+	}
+
+	httpx.JSON(w, http.StatusOK, resp)
+}

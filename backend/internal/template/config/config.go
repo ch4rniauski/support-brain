@@ -14,6 +14,7 @@ type Config struct {
 	Auth     auth.Config
 	Kafka    KafkaConfig
 	Consumer ConsumerConfig
+	Suggest  SuggestConfig
 }
 
 type KafkaConfig struct {
@@ -26,6 +27,13 @@ type ConsumerConfig struct {
 	MaxAttempts    int           `envconfig:"TEMPLATE_CONSUMER_MAX_ATTEMPTS" default:"5"`
 	InitialBackoff time.Duration `envconfig:"TEMPLATE_CONSUMER_INITIAL_BACKOFF" default:"1s"`
 	MaxBackoff     time.Duration `envconfig:"TEMPLATE_CONSUMER_MAX_BACKOFF" default:"30s"`
+}
+
+type SuggestConfig struct {
+	EmbeddingBaseURL     string  `envconfig:"EMBEDDING_BASE_URL" default:"http://localhost:8086"`
+	KnowledgeBaseURL     string  `envconfig:"KNOWLEDGE_BASE_URL" default:"http://localhost:8085"`
+	SimilarityThreshold  float64 `envconfig:"SUGGEST_SIMILARITY_THRESHOLD" default:"0.85"`
+	SearchLimit          int     `envconfig:"SUGGEST_SEARCH_LIMIT" default:"10"`
 }
 
 func Load() (*Config, error) {

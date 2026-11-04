@@ -135,6 +135,10 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
       AUTH_JWT_SECRET: ${AUTH_JWT_SECRET}
       AUTH_TOKEN_TTL: ${AUTH_TOKEN_TTL}
+      EMBEDDING_BASE_URL: ${EMBEDDING_BASE_URL}
+      KNOWLEDGE_BASE_URL: ${KNOWLEDGE_BASE_URL}
+      SUGGEST_SIMILARITY_THRESHOLD: ${SUGGEST_SIMILARITY_THRESHOLD}
+      SUGGEST_SEARCH_LIMIT: ${SUGGEST_SEARCH_LIMIT}
       KAFKA_BROKERS: ${KAFKA_BROKERS}
       KAFKA_TEMPLATE_TOPIC: ${KAFKA_TEMPLATE_TOPIC}
       KAFKA_TEMPLATE_GROUP: ${KAFKA_TEMPLATE_GROUP}
@@ -148,6 +152,10 @@ services:
         condition: service_healthy
       kafka:
         condition: service_healthy
+      embedding:
+        condition: service_started
+      knowledge:
+        condition: service_started
 
   knowledge:
     build:

@@ -13,6 +13,7 @@ import (
 	"github.com/ch4rniauski/support-brain/internal/template/dto"
 	"github.com/ch4rniauski/support-brain/internal/template/repository"
 	"github.com/ch4rniauski/support-brain/pkg/kafka"
+	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
 )
 
@@ -35,14 +36,37 @@ type templateStore interface {
 	Approve(ctx context.Context, id uuid.UUID, approvedAt time.Time) (*domain.Template, error)
 	Reject(ctx context.Context, id uuid.UUID) (*domain.Template, error)
 	ListByStatus(ctx context.Context, status domain.TemplateStatus) ([]domain.Template, error)
+	FindApprovedByIDs(ctx context.Context, ids []uuid.UUID) ([]domain.Template, error)
 }
 
 type TemplateService struct {
-	store templateStore
+	store     templateStore
+	embedding embeddingClient
+	knowledge knowledgeClient
+	suggest   SuggestConfig
+	validate  *validator.Validate
 }
 
-func NewTemplateService(store templateStore) *TemplateService {
-	return &TemplateService{store: store}
+func NewTemplateService(
+	store templateStore,
+	embedding embeddingClient,
+	knowledge knowledgeClient,
+	suggest SuggestConfig,
+) *TemplateService {
+	if suggest.SimilarityThreshold <= 0 {
+		suggest.SimilarityThreshold = 0.85
+	}
+	if suggest.SearchLimit <= 0 {
+		suggest.SearchLimit = 10
+	}
+
+	return &TemplateService{
+		store:     store,
+		embedding: embedding,
+		knowledge: knowledge,
+		suggest:   suggest,
+		validate:  validator.New(),
+	}
 }
 
 func (s *TemplateService) GetByID(ctx context.Context, id uuid.UUID) (*dto.TemplateItem, error) {

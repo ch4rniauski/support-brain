@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/ch4rniauski/support-brain/internal/template/api"
+	"github.com/ch4rniauski/support-brain/internal/template/client"
 	"github.com/ch4rniauski/support-brain/internal/template/config"
 	"github.com/ch4rniauski/support-brain/internal/template/handler"
 	"github.com/ch4rniauski/support-brain/internal/template/repository"
@@ -42,7 +43,17 @@ func main() {
 	authMiddleware := auth.NewMiddleware(tokenManager)
 
 	templateRepo := repository.NewTemplateRepository(pool)
-	templateService := service.NewTemplateService(templateRepo)
+	embeddingClient := client.NewEmbeddingClient(cfg.Suggest.EmbeddingBaseURL, tokenManager)
+	knowledgeClient := client.NewKnowledgeClient(cfg.Suggest.KnowledgeBaseURL)
+	templateService := service.NewTemplateService(
+		templateRepo,
+		embeddingClient,
+		knowledgeClient,
+		service.SuggestConfig{
+			SimilarityThreshold: cfg.Suggest.SimilarityThreshold,
+			SearchLimit:         cfg.Suggest.SearchLimit,
+		},
+	)
 	templateHandler := handler.NewTemplateHandler(templateService)
 
 	consumer := kafka.NewConsumer(

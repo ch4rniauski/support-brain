@@ -14,6 +14,8 @@ import (
 	"github.com/google/uuid"
 )
 
+const qaPairsPath = "/qa-pairs"
+
 type IntakeClient struct {
 	baseURL    string
 	httpClient *http.Client
@@ -40,7 +42,7 @@ func (c *IntakeClient) ListQAPairs(ctx context.Context, ids []uuid.UUID) (*dto.L
 
 	q := url.Values{}
 	q.Set("ids", strings.Join(parts, ","))
-	endpoint := fmt.Sprintf("%s/qa-pairs?%s", c.baseURL, q.Encode())
+	endpoint := fmt.Sprintf("%s%s?%s", c.baseURL, qaPairsPath, q.Encode())
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
